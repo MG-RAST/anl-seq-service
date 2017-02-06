@@ -1,0 +1,16 @@
+#!/bin/bash
+
+TARGET=/local/incoming/hiseq2000/140204_SN1035_0200_BC2RNVACXX/unaligned_xt_adptrim/Undetermined_indices/Sample_lane3/lane3_Undetermined_L003_R1_001.fastq.gz
+
+countbarcodessample.sh $TARGET   # gives a big ugly histogram
+
+countbarcodessample.sh $TARGET | namebarcodes.py   # gives you a table of barcode-pairs
+
+#  The following invokations are aptional, and change the behavior.
+#  Ordinarily, the script will try to guess which kind of barcodes you are 
+#  using, but this forces it to look at only the first 6, first 8, or 
+#  last 8 letters of the barcodes
+
+countbarcodessample.sh $TARGET | namebarcodes.py  --endonly
+countbarcodessample.sh $TARGET | namebarcodes.py  --truseqonly
+countbarcodessample.sh $TARGET | namebarcodes.py  --beginonly
