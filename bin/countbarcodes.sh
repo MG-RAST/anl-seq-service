@@ -1,5 +1,26 @@
 #!/bin/bash
 
+usage () {
+	echo "Usage: countbarcodes.sh <input_file>"
+	echo "[-s] sample (use only 250,000 lines instead of entire file)"
+}
+
+while getopts hs: option; do
+    case "${option}"
+        in
+	s) 	SAMPLE=1;;
+	h)	usage ; exit ;;
+	*) usage  ; exit 1 ;;
+    esac
+done
+
+if [[ ${1} == "" ]]
+then
+	usage
+	exit 1
+fi
+
+
 if [[ $0 =~ countbarcodessample.sh ]] 
 then
 LINES=1000000     # 250 Thousand reads

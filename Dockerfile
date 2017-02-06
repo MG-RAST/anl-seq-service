@@ -1,18 +1,22 @@
 # Docker file for the Argonne Sequencing service
 
-FROM	centos
+FROM	ubuntu
 MAINTAINER folker@anl.gov
 
 
-RUN yum update -y && yum install -y \
-   epel-release \
+RUN apt-get update -y
+RUN  apt-get install -y \
    dh-autoreconf \
-   epel-release \
    unzip \
    wget \
    python \
-   python2-pip \
-   emacs \
+   python-setuptools\
+#   python-dev\
+   build-essential\
+   python-pip\
+   jove \
+   alien \
+   idba \
    curl 
   
 
@@ -21,10 +25,15 @@ RUN yum update -y && yum install -y \
 # http://support.illumina.com/content/dam/illumina-support/documents/downloads/software/bcl2fastq/bcl2fastq2-v2-18-0-12-linux-x86-64.zip
 ADD http://support.illumina.com/content/dam/illumina-support/documents/downloads/software/bcl2fastq/bcl2fastq2-v2-18-0-12-linux-x86-64.zip /root/bcl2fastq2-v2-18-0-12-linux-x86-64.zip
 RUN  (cd /root ; unzip /root/bcl2fastq2-v2-18-0-12-linux-x86-64.zip )
-RUN rpm -i /root/bcl2fastq2-v2.18.0.12-Linux-x86_64.rpm 
+#RUN rpm -i /root/bcl2fastq2-v2.18.0.12-Linux-x86_64.rpm 
+RUN alien -i /root/bcl2fastq2-v2.18.0.12-Linux-x86_64.rpm
+
+
+# copy local files to /usr/local/ (binaries and adapter files)
+ADD bin/* /usr/local/bin/
+ADD share/* /usr/local/share/
 
 
 # install CWL runner
-# WILL STILL FAIL DUE TO OLD SETUPTOOLS to be fixed later
-# RUN pip install cwlref-runner
+RUN pip install cwlref-runner
 
