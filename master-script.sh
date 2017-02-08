@@ -30,13 +30,13 @@ while getopts bxmhe:i:o:s:t: option; do
             h) 	HELP=1;;
             i) 	INPUT=${OPTARG};;
             o) 	OUTPUT=${OPTARG};;
+			s) 	SAMPLESHEET=${OPTARG};;
 			e) 	OPTIONS="${OPTIONS}	--no-eamss"
 			m) 	OPTIONS="${OPTIONS} --mismatches 1"
 			t)	OPTIONS="${OPTIONS} -t ${OPTARG}"
 			x) 	OPTIONS="${OPTIONS} --ignore-missing-stats"
 			b)  OPTIONS="${OPTIONS} --ignore-missing-bcl"
-			s) 	SAMPLESHEET=${OPTARG};;
-		*)
+			*)
 			usage
 			;;
     esac

@@ -6,18 +6,19 @@ MAINTAINER folker@anl.gov
 
 RUN apt-get update -y
 RUN  apt-get install -y \
+   alien \
+   bowtie2 \
+   build-essential\
+   curl \
    dh-autoreconf \
-   unzip \
-   wget \
+   idba \
+   jove \
    python \
    python-setuptools\
 #   python-dev\
-   build-essential\
    python-pip\
-   jove \
-   alien \
-   idba \
-   curl 
+   unzip \
+   wget 
   
 
 
