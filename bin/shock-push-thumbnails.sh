@@ -18,8 +18,8 @@ rm -f ${TMP-TAR-FILE}
 
 
 usage () { 
-	echo "Usage: shock-push.sh [-h <help>] -r <run folder> "
-
+	echo "Usage: shock-push-thumbnails.sh [-h <help>] [-d] -r <run folder> "
+    echo " -d  delete files after upload"
  }
 
 # get options
@@ -28,7 +28,7 @@ while getopts hr: option; do
         in
             h) 	HELP=1;;
             r) 	RUN-FOLDER=${OPTARG};;
-#			d) DELETE-FOLDER=1;;	leave for later
+			d)  DELETE=1;;
 		*)
 			usage
 			;;
@@ -53,46 +53,43 @@ fi
 # strip the prefix of the run folder to get the name 
 RUN-FOLDER-NAME=`basename ${RUN-FOLDER}`
 
+# terminate on error
+set -e
+
 # fastq files
 cd ${RUN-FOLDER}
-FASTQ-FILES=`find ./ -name \*.fastq\*`
-for i in ${FASTQ-FILES}
-do
-	echo $i
 
-	# use Illumina directory structure to extract group (e.g. unaligned), project and sample info.
-	echo $i | awk -F/  '{print $2 $3 $4 $5}' | while read  group project sample file
-	do
-	    echo $group $project $sample $file
+TMP_TAR_FILE=/var/tmp/temp.tar.1.$$.tar.gz
 
-		# with file, without using multipart form (not recommended for use with curl!)
-		curl -X POST     -F 'attributes_str={ "RUN-FOLDER" : '${RUN-FOLDER-NAME} '}' \
-						 -F 'attributes_str={ "type" : "run-folder-archive"}' \
-						 -F 'attribute_str={ "group" : "$group" }' \
- 						 -F 'attribute_str={ "project" : "$project" }' \		
-						 -F 'attribute_str={ "sample" : "$sample" }' \
-						 -F 'attribute_str={ "name" : "$file" }' \	
-						 -F 'attribute_str={ "Organization" : "ANL-SEQ-Core" }' \
-							 --data-binary $i ${AUTH} ${SHOCK-SERVER}/node
+res=`tar cvfz ${TMP_TAR_FILE} Thumbnail_Images/`
+
+if [ !$? -eq 0 ]
+then 
+  echo "$0 Could not create Thumbnail tar file " >&2	
+  exit 1
+fi
+
+# with file, without using multipart form (not recommended for use with curl!)
+JSON="attributes_str={ \"run-folder\" : ${RUN-FOLDER-NAME},\
+						 \"type\" : "run-folder-archive-thumbnails",\
+						 \"name\" : \"${RUN-FOLDER}.Thumbnail_Images.tar.gz\",\	
+						 \"organization\" : \"ANL-SEQ-Core\" }""
+
+	curl -X POST ${AUTH} -F ${JSON} --data-binary ${TMP_TAR_FILE} ${AUTH} ${SHOCK-SERVER}/node
 	done
 done
 
 
+# clean up
+rm -f ${TMP_TAR_FILE}
 
-
-exit 1
-
-# 
-echo "pruning goes here, to be added later after discussing with SARAH"
-
-
-echo "tar and gzip goes here"
-return=`tar cfz ${TMP-TAR-FILE} ${RUN-FOLDER} `
-if [[ $return != 0 ]]
+if [[ ${DELETE} == "1" ]]
 then
-	echo "$0 tar command failed [ $? ] "
-	rm -f ${TMP-TAR-FILE}
+	echo "removing Thumbnails in 5 seconds [time for CTRL-C now...]"
+	sleep 5
+#	rm -rf ${RUN-FOLDER}/Thumbnail_images
 fi
+
 
 
 

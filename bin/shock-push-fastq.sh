@@ -18,8 +18,8 @@ rm -f ${TMP-TAR-FILE}
 
 
 usage () { 
-	echo "Usage: shock-push.sh [-h <help>] -r <run folder> "
-
+	echo "Usage: shock-push.sh [-h <help>] [-d] -r <run folder> "
+    echo " -d  delete files after upload"
  }
 
 # get options
@@ -28,7 +28,7 @@ while getopts hr: option; do
         in
             h) 	HELP=1;;
             r) 	RUN-FOLDER=${OPTARG};;
-#			d) DELETE-FOLDER=1;;	leave for later
+			d) DELETE=1;;	leave for later
 		*)
 			usage
 			;;
@@ -48,7 +48,11 @@ if [[ ! -e ${RUN-FOLDER}/RTAComplete.txt] ]
 then
 	echo "$0 ${RUN-FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
 	exit 1
-fi	 
+fi	
+
+
+# exit on any error
+set -e 
 
 # strip the prefix of the run folder to get the name 
 RUN-FOLDER-NAME=`basename ${RUN-FOLDER}`
@@ -61,38 +65,60 @@ do
 	echo $i
 
 	# use Illumina directory structure to extract group (e.g. unaligned), project and sample info.
+	# ./unaligned/Project_AR3/Sample_AR314/AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
 	echo $i | awk -F/  '{print $2 $3 $4 $5}' | while read  group project sample file
 	do
-	    echo $group $project $sample $file
-
+		JSON="	{ \"run-folder\" : \"${RUN-FOLDER-NAME}\" , \
+				  \"type\" : \"run-folder-archive-fastq\" , \
+   			 	\"group\" : \"$group\", \
+				\"project\" : \"$project\",\		
+				\"sample\" : \"$sample\",\
+				\"name\" : \"$file\",\	
+				\"organization\" : \"ANL-SEQ-Core\" }" 
+								
 		# with file, without using multipart form (not recommended for use with curl!)
-		curl -X POST     -F 'attributes_str={ "RUN-FOLDER" : '${RUN-FOLDER-NAME} '}' \
-						 -F 'attributes_str={ "type" : "run-folder-archive"}' \
-						 -F 'attribute_str={ "group" : "$group" }' \
- 						 -F 'attribute_str={ "project" : "$project" }' \		
-						 -F 'attribute_str={ "sample" : "$sample" }' \
-						 -F 'attribute_str={ "name" : "$file" }' \	
-						 -F 'attribute_str={ "Organization" : "ANL-SEQ-Core" }' \
-							 --data-binary $i ${AUTH} ${SHOCK-SERVER}/node
+#		curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary $i  ${SHOCK-SERVER}/node
+echo ${JSON}
+echo $i
 	done
 done
 
 
+# find SAV files now and tar them
 
+# from documentation SAV files are:  RunInfo.xml, runParameters.xml, SampleSheet.csv, InterOP  (directory)
+cd ${RUN-FOLDER}
+SAV-FILES="RunInfo.xml runParameters.xml SampleSheet.csv InterOP"
 
-exit 1
-
-# 
-echo "pruning goes here, to be added later after discussing with SARAH"
-
-
-echo "tar and gzip goes here"
-return=`tar cfz ${TMP-TAR-FILE} ${RUN-FOLDER} `
+return=`tar cfz ${TMP-TAR-FILE} ${SAV-FILES} `
 if [[ $return != 0 ]]
 then
 	echo "$0 tar command failed [ $? ] "
 	rm -f ${TMP-TAR-FILE}
 fi
+
+JSON="	{ \"run-folder\" : \"${RUN-FOLDER-NAME}\" , \
+		  \"type\" : \"run-folder-archive-sav\" , \
+		\"name\" : \"${RUN-FOLDER-NAME}-sav.tar.gz\" ,\	
+		\"organization\" : \"ANL-SEQ-Core\" }" 
+						
+# with file, without using multipart form (not recommended for use with curl!)
+curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary ${TMP-TAR-FILE}  ${SHOCK-SERVER}/node
+
+if [[ ${DELETE-FILES} == "1" ]]
+	then	
+		cd ${RUN-FOLDER}
+		echo "removing FASTQ + SAV files in 5 seconds [time for CTRL-C now...]"
+		sleep 5
+		# rm -rf ${SAV-FILES} ${FASTQ-FILES}
+	fi
+	
+# cleanup
+exit 1
+rm -f ${TMP-TAR-FILE}
+ 
+
+
 
 
 
