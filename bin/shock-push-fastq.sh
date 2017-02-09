@@ -10,11 +10,11 @@
 
 
 # constants
-SHOCK-SERVER="http://shock.metagenomics.anl.gov"
-TMP-TAR-FILE="/var/tmp/temporary-tar-file-shock-client.$$.tar.gz"
+SHOCK_SERVER="http://shock.metagenomics.anl.gov"
+TMP_TAR_FILE="/var/tmp/temporary-tar-file-shock-client.$$.tar.gz"
 AUTH=""
 
-rm -f ${TMP-TAR-FILE}
+rm -f ${TMP_TAR_FILE}
 
 
 usage () { 
@@ -27,7 +27,7 @@ while getopts hr: option; do
     case "${option}"
         in
             h) 	HELP=1;;
-            r) 	RUN-FOLDER=${OPTARG};;
+            r) 	RUN_FOLDER=${OPTARG};;
 			d) DELETE=1;;	
 		*)
 			usage
@@ -35,24 +35,24 @@ while getopts hr: option; do
     esac
 done
 
-if [[ ${RUN-FOLDER} == "" ]]
+if [[ -z ${RUN_FOLDER} ]]
 then
 	usage
 	exit 1
 fi
 
 # 
-if [[ ! -d ${RUN-FOLDER} ] ]
+if [  ! -d ${RUN_FOLDER} ] 
 then
-	echo "$0 ${RUN-FOLDER} not found"
+	echo "$0 ${RUN_FOLDER} not found"
 	usage
 	exit 1
 fi
 
 # check for presence of RTAComplete.txt
-if [[ ! -e ${RUN-FOLDER}/RTAComplete.txt] ]
+if [[ ! -e ${RUN_FOLDER}/RTAComplete.txt] ]
 then
-	echo "$0 ${RUN-FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
+	echo "$0 ${RUN_FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
 	exit 1
 fi	
 
@@ -62,12 +62,12 @@ if [[ ]]
 set -e 
 
 # strip the prefix of the run folder to get the name 
-RUN-FOLDER-NAME=`basename ${RUN-FOLDER}`
+RUN_FOLDER_NAME=`basename ${RUN_FOLDER}`
 
 # fastq files
-cd ${RUN-FOLDER}
-FASTQ-FILES=`find ./ -name \*.fastq\*`
-for i in ${FASTQ-FILES}
+cd ${RUN_FOLDER}
+FASTQ_FILES=`find ./ -name \*.fastq\*`
+for i in ${FASTQ_FILES}
 do
 	echo $i
 
@@ -75,7 +75,7 @@ do
 	# ./unaligned/Project_AR3/Sample_AR314/AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
 	echo $i | awk -F/  '{print $2 $3 $4 $5}' | while read  group project sample file
 	do
-		JSON="	{ \"run-folder\" : \"${RUN-FOLDER-NAME}\" , \
+		JSON="	{ \"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
 				  \"type\" : \"run-folder-archive-fastq\" , \
    			 	\"group\" : \"$group\", \
 				\"project\" : \"$project\",\		
@@ -94,35 +94,35 @@ done
 # find SAV files now and tar them
 
 # from documentation SAV files are:  RunInfo.xml, runParameters.xml, SampleSheet.csv, InterOP  (directory)
-cd ${RUN-FOLDER}
+cd ${RUN_FOLDER}
 SAV-FILES="RunInfo.xml runParameters.xml SampleSheet.csv InterOP"
 
-return=`tar cfz ${TMP-TAR-FILE} ${SAV-FILES} `
+return=`tar cfz ${TMP_TAR_FILE} ${SAV_FILES} `
 if [[ $return != 0 ]]
 then
 	echo "$0 tar command failed [ $? ] "
-	rm -f ${TMP-TAR-FILE}
+	rm -f ${TMP_TAR_FILE}
 fi
 
-JSON="	{ \"run-folder\" : \"${RUN-FOLDER-NAME}\" , \
+JSON="	{ \"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
 		  \"type\" : \"run-folder-archive-sav\" , \
-		\"name\" : \"${RUN-FOLDER-NAME}-sav.tar.gz\" ,\	
+		\"name\" : \"${RUN_FOLDER_NAME}-sav.tar.gz\" ,\	
 		\"organization\" : \"ANL-SEQ-Core\" }" 
 						
 # with file, without using multipart form (not recommended for use with curl!)
-#curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary ${TMP-TAR-FILE}  ${SHOCK-SERVER}/node
+#curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary ${TMP_TAR_FILE}  ${SHOCK_SERVER}/node
 
-if [[ ${DELETE-FILES} == "1" ]]
+if [[ ${DELETE_FILES} == "1" ]]
 	then	
-		cd ${RUN-FOLDER}
+		cd ${RUN_FOLDER}
 		echo "removing FASTQ + SAV files in 5 seconds [time for CTRL-C now...]"
 		sleep 5
-		# rm -rf ${SAV-FILES} ${FASTQ-FILES}
+		# rm -rf ${SAV_FILES} ${FASTQ_FILES}
 	fi
 	
 # cleanup
 exit 1
-rm -f ${TMP-TAR-FILE}
+rm -f ${TMP_TAR_FILE}
  
 
 
