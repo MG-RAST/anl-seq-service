@@ -37,7 +37,7 @@ done
 
 if [[ ${RUN-FOLDER} == "" ]]
 then
-	usage()
+	usage
 	exit 1
 fi
 
@@ -45,7 +45,7 @@ fi
 if [[ ! -d ${RUN-FOLDER} ] ]
 then
 	echo "$0 ${RUN-FOLDER} not found"
-	usage()
+	usage
 	exit 1
 fi
 
