@@ -10,9 +10,9 @@
 
 
 # constants
-SHOCK-SERVER=http://shock.metagenomics.anl.gov
-TMP-TAR-FILE=/var/tmp/temporary-tar-file-shock-client.$$.tar.gz
-AUTH=
+SHOCK-SERVER="http://shock.metagenomics.anl.gov"
+TMP-TAR-FILE="/var/tmp/temporary-tar-file-shock-client.$$.tar.gz"
+AUTH=""
 
 rm -f ${TMP-TAR-FILE}
 
@@ -28,12 +28,18 @@ while getopts hr: option; do
         in
             h) 	HELP=1;;
             r) 	RUN-FOLDER=${OPTARG};;
-			d) DELETE=1;;	leave for later
+			d) DELETE=1;;	
 		*)
 			usage
 			;;
     esac
 done
+
+if [[ ${RUN-FOLDER} == "" ]]
+then
+	usage()
+	exit 1
+fi
 
 # 
 if [[ ! -d ${RUN-FOLDER} ] ]
@@ -50,6 +56,7 @@ then
 	exit 1
 fi	
 
+if [[ ]]
 
 # exit on any error
 set -e 
@@ -103,7 +110,7 @@ JSON="	{ \"run-folder\" : \"${RUN-FOLDER-NAME}\" , \
 		\"organization\" : \"ANL-SEQ-Core\" }" 
 						
 # with file, without using multipart form (not recommended for use with curl!)
-curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary ${TMP-TAR-FILE}  ${SHOCK-SERVER}/node
+#curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary ${TMP-TAR-FILE}  ${SHOCK-SERVER}/node
 
 if [[ ${DELETE-FILES} == "1" ]]
 	then	
