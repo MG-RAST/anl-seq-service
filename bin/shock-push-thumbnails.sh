@@ -3,18 +3,18 @@
 
 # # this script pushes a run folder to shock, creating 3 different subsets
 # 
-# a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN-FOLDER-NAME}.tar.gz
+# a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN_FOLDER-NAME}.tar.gz
 # b) multiple fastq files and SAV.tar.fz file are stored (the SAV file includes the Samplesheets and other documents required for the Illumina SAV tool)
-# c) thumbnail files (a single tar.gz file): example: ${RUN-FOLDER-NAME}.tumbnails.tar.tgz
+# c) thumbnail files (a single tar.gz file): example: ${RUN_FOLDER-NAME}.tumbnails.tar.tgz
 # all 3 files are required to obtain the entire RUN-Folder (note the SAV files are stored twice)
 
 
 # constants
-SHOCK-SERVER=http://shock.metagenomics.anl.gov
-TMP-TAR-FILE=/var/tmp/temporary-tar-file-shock-client.$$.tar.gz
+SHOCK_SERVER=http://shock.metagenomics.anl.gov
+TMP_TAR_FILE=/var/tmp/temporary-tar-file-shock-client.$$.tar.gz
 AUTH=
 
-rm -f ${TMP-TAR-FILE}
+rm -f ${TMP_TAR_FILE}
 
 
 usage () { 
@@ -27,7 +27,7 @@ while getopts hr: option; do
     case "${option}"
         in
             h) 	HELP=1;;
-            r) 	RUN-FOLDER=${OPTARG};;
+            r) 	RUN_FOLDER=${OPTARG};;
 			d)  DELETE=1;;
 		*)
 			usage
@@ -36,28 +36,28 @@ while getopts hr: option; do
 done
 
 # 
-if [[ ! -d ${RUN-FOLDER} ] ]
+if [[ ! -d ${RUN_FOLDER} ] ]
 then
-	echo "$0 ${RUN-FOLDER} not found"
+	echo "$0 ${RUN_FOLDER} not found"
 	usage()
 	exit 1
 fi
 
 # check for presence of RTAComplete.txt
-if [[ ! -e ${RUN-FOLDER}/RTAComplete.txt] ]
+if [[ ! -e ${RUN_FOLDER}/RTAComplete.txt] ]
 then
-	echo "$0 ${RUN-FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
+	echo "$0 ${RUN_FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
 	exit 1
 fi	 
 
 # strip the prefix of the run folder to get the name 
-RUN-FOLDER-NAME=`basename ${RUN-FOLDER}`
+RUN_FOLDER_NAME=`basename ${RUN_FOLDER}`
 
 # terminate on error
 set -e
 
 # fastq files
-cd ${RUN-FOLDER}
+cd ${RUN_FOLDER}
 
 TMP_TAR_FILE=/var/tmp/temp.tar.1.$$.tar.gz
 
@@ -70,12 +70,12 @@ then
 fi
 
 # with file, without using multipart form (not recommended for use with curl!)
-JSON="attributes_str={ \"run-folder\" : ${RUN-FOLDER-NAME},\
+JSON="attributes_str={ \"run-folder\" : ${RUN_FOLDER_NAME},\
 						 \"type\" : "run-folder-archive-thumbnails",\
-						 \"name\" : \"${RUN-FOLDER}.Thumbnail_Images.tar.gz\",\	
+						 \"name\" : \"${RUN_FOLDER}.Thumbnail_Images.tar.gz\",\	
 						 \"organization\" : \"ANL-SEQ-Core\" }""
 
-	curl -X POST ${AUTH} -F ${JSON} --data-binary ${TMP_TAR_FILE} ${AUTH} ${SHOCK-SERVER}/node
+	curl -X POST ${AUTH} -F ${JSON} --data-binary ${TMP_TAR_FILE} ${AUTH} ${SHOCK_SERVER}/node
 	done
 done
 
@@ -87,7 +87,7 @@ if [[ ${DELETE} == "1" ]]
 then
 	echo "removing Thumbnails in 5 seconds [time for CTRL-C now...]"
 	sleep 5
-#	rm -rf ${RUN-FOLDER}/Thumbnail_images
+#	rm -rf ${RUN_FOLDER}/Thumbnail_images
 fi
 
 

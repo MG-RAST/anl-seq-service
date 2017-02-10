@@ -16,10 +16,9 @@ AUTH=""
 
 rm -f ${TMP_TAR_FILE}
 
-
+name=`basename $0`
 usage () { 
-	echo "Usage: shock-push.sh [-h <help>] [-d] -r <run folder> "
-    echo " -d  delete files after upload"
+	echo "Usage: ${name} [-h <help>] -r <run folder> "
  }
 
 # get options
@@ -28,7 +27,6 @@ while getopts hr: option; do
         in
             h) 	HELP=1;;
             r) 	RUN_FOLDER=${OPTARG};;
-			d) DELETE=1;;	
 		*)
 			usage
 			;;
@@ -41,34 +39,26 @@ then
 	exit 1
 fi
 
-# 
-if [  ! -d ${RUN_FOLDER} ] 
-then
-	echo "$0 ${RUN_FOLDER} not found"
-	usage
-	exit 1
-fi
-
-# check for presence of RTAComplete.txt
-if [ ! -e ${RUN_FOLDER}/RTAComplete.txt ] 
-then
-	echo "$0 ${RUN_FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
-	exit 1
-fi	
 
 # exit on any error
 set -e 
 
-# strip the prefix of the run folder to get the name 
-RUN_FOLDER_NAME=`basename ${RUN_FOLDER}`
+# create folder if not already present
+mkdir -p ${RUN_FOLDER}
 
 # fastq files
 cd ${RUN_FOLDER}
-FASTQ_FILES=`find ./ -name \*.fastq\*`
+
+# query shock for FASTQ and SAV files 
+FASTQ_FILES="" #ADD HERE
+
 for i in ${FASTQ_FILES}
 do
 	# use Illumina directory structure to extract group (e.g. unaligned), project and sample info.
 	# ./unaligned/Project_AR3/Sample_AR314/AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
+	
+	echo "QUESTION: Do we want to restore the original directory structure?"
+	
 	group=`echo $i | awk -F/  '{print $2 }' `
 	project=`echo $i | awk -F/  '{print $3 }' | sed s/Project_//g`
 	sample=`echo $i | awk -F/  '{print $4 }' | sed s/Sample_//g`
@@ -88,37 +78,17 @@ do
 done
 
 # find SAV files now and tar them
+TMP_TAR_FILE= ""    # get from SHOCK
 
-# from documentation SAV files are:  RunInfo.xml, runParameters.xml, SampleSheet.csv, InterOp  (directory)
-SAV_FILES="RunInfo.xml runParameters.xml SampleSheet.csv InterOP/*"
-
-return=`tar cfz ${TMP_TAR_FILE} ${SAV_FILES} `
+# extract SAV files
+return=`tar xfz ${TMP_TAR_FILE}  `
 if [[ $return != 0 ]]
 then
 	echo "$0 tar command failed [ $? ] "
 	rm -f ${TMP_TAR_FILE}
 fi
 
-JSON="	{ \"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
-		  \"type\" : \"run-folder-archive-sav\" , \
-		\"name\" : \"${RUN_FOLDER_NAME}-sav.tar.gz\" ,\	
-		\"organization\" : \"ANL-SEQ-Core\" }" 
-						
-# with file, without using multipart form (not recommended for use with curl!)
-#curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary ${TMP_TAR_FILE}  ${SHOCK_SERVER}/node
-
-if [[ ${DELETE_FILES} == "1" ]]
-	then	
-		cd ${RUN_FOLDER}
-		echo "removing FASTQ + SAV files in 5 seconds [time for CTRL-C now...]"
-		sleep 5
-		# rm -rf ${SAV_FILES} ${FASTQ_FILES}
-	fi
-	
-# cleanup
-exit 1
-rm -f ${TMP_TAR_FILE}
- 
+# cleanup 
 
 
 
