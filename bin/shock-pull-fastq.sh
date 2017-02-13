@@ -18,25 +18,25 @@ rm -f ${TMP_TAR_FILE}
 
 name=`basename $0`
 usage () { 
-	echo "Usage: ${name} [-h <help>] -r <run folder> "
+echo "Usage: ${name} [-h <help>] -r <run folder> "
  }
 
 # get options
 while getopts hr: option; do
     case "${option}"
         in
-            h) 	HELP=1;;
-            r) 	RUN_FOLDER=${OPTARG};;
+		h) HELP=1;;
+		r) RUN_FOLDER=${OPTARG};;
 		*)
-			usage
-			;;
+		usage
+		;;
     esac
 done
 
 if [[ -z ${RUN_FOLDER} ]]
 then
-	usage
-	exit 1
+usage
+exit 1
 fi
 
 
@@ -54,27 +54,27 @@ FASTQ_FILES="" #ADD HERE
 
 for i in ${FASTQ_FILES}
 do
-	# use Illumina directory structure to extract group (e.g. unaligned), project and sample info.
-	# ./unaligned/Project_AR3/Sample_AR314/AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
-	
-	echo "QUESTION: Do we want to restore the original directory structure?"
-	
-	group=`echo $i | awk -F/  '{print $2 }' `
-	project=`echo $i | awk -F/  '{print $3 }' | sed s/Project_//g`
-	sample=`echo $i | awk -F/  '{print $4 }' | sed s/Sample_//g`
-	file=`echo $i | awk -F/  '{print $5 }' `
+# use Illumina directory structure to extract group (e.g. unaligned), project and sample info.
+# ./unaligned/Project_AR3/Sample_AR314/AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
 
-	JSON="	{ \"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
-				  \"type\" : \"run-folder-archive-fastq\" , \
-   			 	\"group\" : \"$group\", \
-				\"project\" : \"$project\",\		
-				\"sample\" : \"$sample\",\
-				\"name\" : \"$file\",\	
-				\"organization\" : \"ANL-SEQ-Core\" }" 
-								
-		# with file, without using multipart form (not recommended for use with curl!)
-#		curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary $i  ${SHOCK-SERVER}/node
-	echo ${JSON}
+echo "QUESTION: Do we want to restore the original directory structure?"
+
+group=`echo $i | awk -F/  '{print $2 }' `
+project=`echo $i | awk -F/  '{print $3 }' | sed s/Project_//g`
+sample=`echo $i | awk -F/  '{print $4 }' | sed s/Sample_//g`
+file=`echo $i | awk -F/  '{print $5 }' `
+
+JSON="	{ \"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
+			  \"type\" : \"run-folder-archive-fastq\" , \
+			\"group\" : \"$group\", \
+			\"project\" : \"$project\",\
+			\"sample\" : \"$sample\",\
+			\"name\" : \"$file\",\
+			\"organization\" : \"ANL-SEQ-Core\" }" 
+							
+	# with file, without using multipart form (not recommended for use with curl!)
+#	curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary $i  ${SHOCK-SERVER}/node
+echo ${JSON}
 done
 
 # find SAV files now and tar them
@@ -82,10 +82,10 @@ TMP_TAR_FILE= ""    # get from SHOCK
 
 # extract SAV files
 return=`tar xfz ${TMP_TAR_FILE}  `
-if [[ $return != 0 ]]
+if [[ $return != "" ]]
 then
-	echo "$0 tar command failed [ $? ] "
-	rm -f ${TMP_TAR_FILE}
+echo "$0 tar command failed [ $? ] "
+rm -f ${TMP_TAR_FILE}
 fi
 
 # cleanup 

@@ -26,17 +26,17 @@ usage () {
 while getopts hr: option; do
     case "${option}"
         in
-            h) 	HELP=1;;
-            r) 	RUN_FOLDER=${OPTARG};;
-			d)  DELETE=1;;
+		h) HELP=1;;
+		r) RUN_FOLDER=${OPTARG};;
+		d) DELETE=1;;
 		*)
-			usage
-			;;
+		usage
+		;;
     esac
 done
 
 # 
-if [[ ! -d ${RUN_FOLDER} ] ]
+if [[ ! -d ${RUN_FOLDER} ]]
 then
 	echo "$0 ${RUN_FOLDER} not found"
 	usage()
@@ -44,7 +44,7 @@ then
 fi
 
 # check for presence of RTAComplete.txt
-if [[ ! -e ${RUN_FOLDER}/RTAComplete.txt] ]
+if [[ ! -e ${RUN_FOLDER}/RTAComplete.txt ]]
 then
 	echo "$0 ${RUN_FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
 	exit 1
@@ -65,14 +65,14 @@ res=`tar cvfz ${TMP_TAR_FILE} Thumbnail_Images/`
 
 if [ !$? -eq 0 ]
 then 
-  echo "$0 Could not create Thumbnail tar file " >&2	
+  echo "$0 Could not create Thumbnail tar file " >&2
   exit 1
 fi
 
 # with file, without using multipart form (not recommended for use with curl!)
 JSON="attributes_str={ \"run-folder\" : ${RUN_FOLDER_NAME},\
 						 \"type\" : "run-folder-archive-thumbnails",\
-						 \"name\" : \"${RUN_FOLDER}.Thumbnail_Images.tar.gz\",\	
+						 \"name\" : \"${RUN_FOLDER}.Thumbnail_Images.tar.gz\",\
 						 \"organization\" : \"ANL-SEQ-Core\" }""
 
 	curl -X POST ${AUTH} -F ${JSON} --data-binary ${TMP_TAR_FILE} ${AUTH} ${SHOCK_SERVER}/node

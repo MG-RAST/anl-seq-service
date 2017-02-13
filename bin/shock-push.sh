@@ -26,17 +26,17 @@ usage () {
 while getopts hr: option; do
     case "${option}"
         in
-            h) 	HELP=1;;
-            r) 	RUN-FOLDER=${OPTARG};;
-#			d) DELETE-FOLDER=1;;	leave for later
+		h) HELP=1;;
+		r) RUN-FOLDER=${OPTARG};;
+#		d) DELETE-FOLDER=1;; leave for later
 		*)
-			usage
-			;;
+		usage
+		;;
     esac
 done
 
 # 
-if [[ ! -d ${RUN-FOLDER} ] ]
+if [[ ! -d ${RUN-FOLDER} ]]
 then
 	echo "$0 ${RUN-FOLDER} not found"
 	usage()
@@ -44,7 +44,7 @@ then
 fi
 
 # check for presence of RTAComplete.txt
-if [[ ! -e ${RUN-FOLDER}/RTAComplete.txt] ]
+if [[ ! -e ${RUN-FOLDER}/RTAComplete.txt ]]
 then
 	echo "$0 ${RUN-FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
 	exit 1
@@ -69,7 +69,7 @@ do
 		curl -X POST     -F 'attributes_str={ "RUN-FOLDER" : '${RUN-FOLDER-NAME} '}' \
 						 -F 'attributes_str={ "type" : "run-folder-archive"}' \
 						 -F 'attribute_str={ "group" : "$group" }' \
- 						 -F 'attribute_str={ "project" : "$project" }' \		
+						 -F 'attribute_str={ "project" : "$project" }' \		
 						 -F 'attribute_str={ "sample" : "$sample" }' \
 						 -F 'attribute_str={ "name" : "$file" }' \	
 						 -F 'attribute_str={ "Organization" : "ANL-SEQ-Core" }' \
@@ -88,7 +88,7 @@ echo "pruning goes here, to be added later after discussing with SARAH"
 
 echo "tar and gzip goes here"
 return=`tar cfz ${TMP-TAR-FILE} ${RUN-FOLDER} `
-if [[ $return != 0 ]]
+if [[ $return != "" ]]
 then
 	echo "$0 tar command failed [ $? ] "
 	rm -f ${TMP-TAR-FILE}
