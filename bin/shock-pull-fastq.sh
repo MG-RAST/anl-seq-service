@@ -49,28 +49,67 @@ mkdir -p ${RUN_FOLDER}
 # fastq files
 cd ${RUN_FOLDER}
 
-# query shock for FASTQ and SAV files 
-FASTQ_FILES="" #ADD HERE
+# query shock for FASTQ and SAV files
+# use the JQ tool to parse the correct IDs for the SHOCK objects from the return JSON struct 
+#    the correct invocation is --> jq -r '{ data: .data[].id  } '  <-- 
 
-for i in ${FASTQ_FILES}
+FASTQ_FILES_JSON="
+curl -X GET "http://shock.metagenomics.anl.gov/node/order=created_on&direction=desc&offset=0&querynode&attributes.data_type=run-folder-archive-fastq&run-folder=${RUN_FOLDER_NAME}" -H 'Host: shock.metagenomics.anl.gov' -H 'Accept: application/json, text/javascript, */*; q=0.01' ${AUTH}"
+
+# sample jq output
+# {
+#  "data": "5c44f98b-a83f-4320-ac30-abdcad64c7fa",
+#  "name": "error",
+#  "md5": "b0343349b7f7b3ab6550c649a3299a9d",
+#  "length": 376,
+#  "owner": "anonymous"
+# }
+
+#FASTQ_FILES_IDS=echo "${FASTQ_FILES_JSON}" | jq -r '{ data: .data[].id  } ' | tr -d " {}\"" | fgrep data | cut -f2 -d:
+#USE JQ to parse JSON install via "wget -O jq https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64"
+
+# parse filename, project, group, sample , md5 and length from JSON struct
+PARSED_JSON= `echo ${FASTQ_FILES_JSON} | jq -r '{ data: .data[] .id , name: .data[].file.name , md5: .data[].file.checksum.md5 , length: .data[].file.size, project: .data[].attributes.project , group: .data[].attributes.group , sample: .data[].attributes.sample}  ' |  awk '  BEGIN { RS="\}" } { print  $3 $5 $7 $9 } ' ` | tr -d "\" `
+
+for i in ${PARSED_JSON}
 do
+	file=`echo $i | awk -F/  '{print $1 }'  `
+	filename=`echo $i | awk -F/  '{print $2 }'  `
+	md5=`echo $i | awk -F/  '{print $3 }'  `
+	group=`echo $i | awk -F/  '{print $2 }' `
+	sample="Sample_"`echo $i | awk -F/  '{print $4 }' | sed s/Sample_//g`
+	project="Project_"`echo $i | awk -F/  '{print $3 }' | sed s/Project_//g`
+
+	mkdir -p ${sample}/${project}/${sample}
+	set -e
+	res=`curl ${AUTH} --data-binary $i  ${SHOCK-SERVER}/node > ${filename}`
+
+	if [[ $res != 0 ]]
+		then
+			echo "download failed ($filename)"
+			exit 1
+	fi
+	set +e
+
+done
+
+
 	# use Illumina directory structure to extract group (e.g. unaligned), project and sample info.
 	# ./unaligned/Project_AR3/Sample_AR314/AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
-	
-	echo "QUESTION: Do we want to restore the original directory structure?"
-	
+		
 	group=`echo $i | awk -F/  '{print $2 }' `
 	project=`echo $i | awk -F/  '{print $3 }' | sed s/Project_//g`
 	sample=`echo $i | awk -F/  '{print $4 }' | sed s/Sample_//g`
 	file=`echo $i | awk -F/  '{print $5 }' `
 
-	JSON="	{ \"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
-				  \"type\" : \"run-folder-archive-fastq\" , \
+	JSON="	{ \"organization\" : \"ANL-SEQ-Core\" , \
+		 		\"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
+				\"type\" : \"run-folder-archive-fastq\" , \
    			 	\"group\" : \"$group\", \
 				\"project\" : \"$project\",\		
 				\"sample\" : \"$sample\",\
-				\"name\" : \"$file\",\	
-				\"organization\" : \"ANL-SEQ-Core\" }" 
+				\"name\" : \"$file\"
+				}" 
 								
 		# with file, without using multipart form (not recommended for use with curl!)
 #		curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary $i  ${SHOCK-SERVER}/node

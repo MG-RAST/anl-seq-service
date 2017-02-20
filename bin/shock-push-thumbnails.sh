@@ -75,7 +75,7 @@ JSON="attributes_str={ \"run-folder\" : ${RUN_FOLDER_NAME},\
 						 \"name\" : \"${RUN_FOLDER}.Thumbnail_Images.tar.gz\",\	
 						 \"organization\" : \"ANL-SEQ-Core\" }""
 
-	curl -X POST ${AUTH} -F ${JSON} --data-binary ${TMP_TAR_FILE} ${AUTH} ${SHOCK_SERVER}/node
+#curl -X POST ${AUTH} -F ${JSON} --data-binary ${TMP_TAR_FILE} ${AUTH} ${SHOCK_SERVER}/node
 	done
 done
 
