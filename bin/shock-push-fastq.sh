@@ -26,12 +26,12 @@ usage () {
 while getopts hr: option; do
     case "${option}"
         in
-            h) 	HELP=1;;
-            r) 	RUN_FOLDER=${OPTARG};;
-			d) DELETE=1;;	
+		h) HELP=1;;
+		r) RUN_FOLDER=${OPTARG};;
+		d) DELETE=1;;
 		*)
-			usage
-			;;
+		usage
+		;;
     esac
 done
 
@@ -85,6 +85,7 @@ do
 	  			\"sample\" : \"$sample\",\
 		  		\"name\" : \"$file\"
 				}" 
+
 								
 		# with file, without using multipart form (not recommended for use with curl!)
 		JSON=`curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary $i  ${SHOCK-SERVER}/node`
@@ -124,7 +125,8 @@ done
 SAV_FILES="RunInfo.xml runParameters.xml SampleSheet.csv InterOp/*"
 
 return=`tar cfz ${TMP_TAR_FILE} ${SAV_FILES} `
-if [[ $? != 0 ]]
+
+if [[ $return != "" ]]
 then
 	echo "$0 tar command failed [ $? ] "
 	rm -f ${TMP_TAR_FILE}
@@ -132,20 +134,21 @@ fi
 
 JSON="	{ \"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
 		  \"type\" : \"run-folder-archive-sav\" , \
-		\"name\" : \"${RUN_FOLDER_NAME}-sav.tar.gz\" ,\	
-		\"owner\" : \"ANL-SEQ-Core\" }" 
+				\"name\" : \"${RUN_FOLDER_NAME}-sav.tar.gz\" ,\	
+			\"owner\" : \"ANL-SEQ-Core\" \
+		}" 
 						
 # with file, without using multipart form (not recommended for use with curl!)
 #curl -X POST ${AUTH} -F "attributes_str=${JSON}" --data-binary ${TMP_TAR_FILE}  ${SHOCK_SERVER}/node
 
 if [[ ${DELETE_FILES} == "1" ]]
-	then	
+	then
 		cd ${RUN_FOLDER}
 		echo "removing FASTQ + SAV files in 5 seconds [time for CTRL-C now...]"
 		sleep 5
 		# rm -rf ${SAV_FILES} ${FASTQ_FILES}
 	fi
-	
+
 # cleanup
 exit 1
 rm -f ${TMP_TAR_FILE}

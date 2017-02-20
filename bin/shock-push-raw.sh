@@ -26,17 +26,17 @@ usage () {
 while getopts hr: option; do
     case "${option}"
         in
-            h) 	HELP=1;;
-            r) 	RUN_FOLDER=${OPTARG};;
-			d)  DELETE=1;;
+		h) HELP=1;;
+		r) RUN_FOLDER=${OPTARG};;
+		d) DELETE=1;;
 		*)
-			usage
-			;;
+		usage
+		;;
     esac
 done
 
 # 
-if [[ ! -d ${RUN_FOLDER} ] ]
+if [[ ! -d ${RUN_FOLDER} ]]
 then
 	echo "$0 ${RUN_FOLDER} not found"
 	usage()
@@ -44,7 +44,7 @@ then
 fi
 
 # check for presence of RTAComplete.txt
-if [[ ! -e ${RUN_FOLDER}/RTAComplete.txt] ]
+if [[ ! -e ${RUN_FOLDER}/RTAComplete.txt ]]
 then
 	echo "$0 ${RUN_FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
 	exit 1

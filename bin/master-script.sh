@@ -19,7 +19,7 @@ usage () {
 	echo "[-x] Missing stats files"
 	echo "[-b] Missing bcl file"
 	echo "<INPUT DIR> -- the path to the input files"
- 	echo "<OUTPUT DIR> -- the path to the output files"
+	echo "<OUTPUT DIR> -- the path to the output files"
 	echo "<SAMPLE SHEET> -- path to the sample sheet (xls format)"
  }
 
@@ -27,18 +27,18 @@ usage () {
 while getopts bxmhe:i:o:s:t: option; do
     case "${option}"
         in
-            h) 	HELP=1;;
-            i) 	INPUT=${OPTARG};;
-            o) 	OUTPUT=${OPTARG};;
-			s) 	SAMPLESHEET=${OPTARG};;
-			e) 	OPTIONS="${OPTIONS}	--no-eamss"
-			m) 	OPTIONS="${OPTIONS} --barcode-mismatches 1"
-			t)	OPTIONS="${OPTIONS} -t ${OPTARG}"
-			x) 	OPTIONS="${OPTIONS} --ignore-missing-stats"
-			b)  OPTIONS="${OPTIONS} --ignore-missing-bcl"
-			*)
-			usage
-			;;
+		h) 	HELP=1;;
+		i) 	INPUT=${OPTARG};;
+		o) 	OUTPUT=${OPTARG};;
+		s) 	SAMPLESHEET=${OPTARG};;
+		e) 	OPTIONS="${OPTIONS} --no-eamss";;
+		m) 	OPTIONS="${OPTIONS} --barcode-mismatches 1";;
+		t)	OPTIONS="${OPTIONS} --tiles ${OPTARG}";;
+		x) 	OPTIONS="${OPTIONS} --ignore-missing-stats";;
+		b)  OPTIONS="${OPTIONS} --ignore-missing-bcl";;
+		*)
+		usage
+		;;
     esac
 done
 
@@ -51,7 +51,7 @@ echo "WE STILL NEED TO WORK OUT THE ADAPTER STORY"
 
 ## this needs to be passed along as an argument from the invoking script
 # 
-ECHO "THIS NEEDS TO BE SET BY THE INVOKING SCRIPT"
+echo "BM_OPTION NEEDS TO BE SET BY THE INVOKING SCRIPT"
 #Nextera or dual index single index (8bp)
 BM_OPTION="--use-bases-mask Y*,I8,Y*"   # what is with the aligned1 output dir? Convention??
 #Truseq 6bp index on a dual index run (6 bp)
@@ -78,6 +78,6 @@ BM_OPTION="--use-bases-mask y151,y12,y151"
 #bcl2fastq2
 
 
-bcl2fastq2 --runfolder-dir ${INPUT} --output-dir ${OUTPUT} ${OPTION} ${BM_OPTION} --sample-sheet ${SAMPLESHEET}
+echo bcl2fastq --runfolder-dir ${INPUT} --output-dir ${OUTPUT} ${OPTIONS} ${BM_OPTION} --sample-sheet ${SAMPLESHEET}
 
 
