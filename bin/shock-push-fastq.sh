@@ -10,7 +10,23 @@
 # #############################################
 # #############################################
 
+# #############################################
+
+# constants
+SHOCK_SERVER="http://shock.metagenomics.anl.gov"
+TMP_TAR_FILE="/var/tmp/temporary-tar-file-shock-client.$$.tar.gz"
+
 # these functions to be use by all scripts 
+
+# make sure all files are deleted if we exit prematurely or die
+function clean_up {
+
+	# Perform program exit housekeeping
+	rm -f ${TMP_TAR_FILE}
+	exit
+}
+trap clean_up SIGHUP SIGINT SIGTERM
+
 
 # securely write filename to SHOCK using the JSON information
 # note that the env variable AUTH will provide the authentication 
@@ -68,12 +84,6 @@ function secure_shock_write {
 	}
 
 # #############################################
-
-# constants
-SHOCK_SERVER="http://shock.metagenomics.anl.gov"
-TMP_TAR_FILE="/var/tmp/temporary-tar-file-shock-client.$$.tar.gz"
-
-# #############################################
 # #############################################
 
 
@@ -86,7 +96,7 @@ function usage () {
  }
 
 # get options
-while getopts hr: option; do
+while getopts hdr: option; do
     case "${option}"
         in
 		h) HELP=1;;

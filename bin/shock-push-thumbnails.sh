@@ -9,15 +9,83 @@
 # all 3 files are required to obtain the entire RUN-Folder (note the SAV files are stored twice)
 
 
+# #############################################
 # constants
 SHOCK_SERVER=http://shock.metagenomics.anl.gov
 TMP_TAR_FILE=/var/tmp/temporary-tar-file-shock-client.$$.tar.gz
-AUTH=
+FILE_NAME_LIST_FILE=/var/tmp/$$._tar_name_list.txt.$$
+
+# #############################################
+# make sure all files are deleted if we exit prematurely or die
+function clean_up {
+
+	# Perform program exit housekeeping
+	rm -f ${TMP_TAR_FILE} ${FILE_NAME_LIST_FILE}
+	exit
+}
+trap clean_up SIGHUP SIGINT SIGTERM
+
+
+# securely write filename to SHOCK using the JSON information
+# note that the env variable AUTH will provide the authentication 
+function secure_shock_write {
+	JSON=$1
+	FILENAME=$2
+	
+	echo "uploading ${FILENAME} .. "
+								
+		# with file, without using multipart form (not recommended for use with curl!)
+		JSON=`curl --progress-bar -X POST -H "${AUTH}" -F "attributes_str=${JSON}" -F "upload=@${FILENAME}" ${SHOCK_SERVER}/node`
+		# parse the return JSON to find error
+		ERROR_STATUS=`echo ${JSON} | jq -r  '{ error: .error }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ "  `
+		# grab nodeid from JSON return
+			
+		NODE_ID=`echo ${JSON} | jq -r ' { nid: .data.id }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " `
+				
+		# if there is no return JSON and or we see an error status we report and die
+    if [  ${NODE_ID} == "" ]
+			then
+				echo "can't get a node id (${FILENAME})"
+				exit 1		
+		fi
+		
+		# if there is no return JSON and or we see an error status we report and die
+    if [  "${JSON}" == ""  -o   "${ERROR_STATUS}" != "null"  ]
+			then
+				echo "can't get feedback for upload (${FILENAME}, ${ERROR_STATUS})"
+				exit 1		
+		fi
+
+		echo "done."
+
+		echo "Validating MD5 checksum ... \c"
+		# get MD5 for node ID and validate with local md5
+		NODE_ATTRIBUTES=`curl -s -X GET  -H "${AUTH}" "http://shock.metagenomics.anl.gov/node/${NODE_ID}" `
+		SHOCK_MD5=`echo ${NODE_ATTRIBUTES} | jq -r '{ md5: .data.file.checksum.md5 }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " `
+		
+		if [[ ${SHOCK_MD5} == "" ]] # this needs to check for the correct shock response (status 200?)
+		then
+			echo "$0 could not obtain md5 sum for SHOCK node ${nodeid}"
+			exit 1
+		fi
+		
+		# note this will need to be changed when not running on a Mac 
+		FILE_MD5=`md5 -q ${FILENAME}`		
+		#FILE_MD5=`md5sum $i` # for Linux
+		if [[ ${FILE_MD5} != ${SHOCK_MD5} ]]
+				then
+					echo "$0 MD5 checksum mismatch for ${FILENAME}, aborting (local-md5:(${FILE_MD5}), remote-md5:(${SHOCK_MD5})"
+					exit 1	
+		fi
+		
+		echo "done"
+	}
+
 
 rm -f ${TMP_TAR_FILE}
 
 
-usage () { 
+function usage { 
 	echo "Usage: shock-push-thumbnails.sh [-h <help>] [-d] -r <run folder> "
     echo " -d  delete files after upload"
  }
@@ -59,8 +127,6 @@ set -e
 # fastq files
 cd ${RUN_FOLDER}
 
-TMP_TAR_FILE=/var/tmp/temp.tar.1.$$.tar.gz
-
 res=`tar cvfz ${TMP_TAR_FILE} Thumbnail_Images/`
 
 if [ !$? -eq 0 ]
@@ -71,14 +137,13 @@ fi
 
 # with file, without using multipart form (not recommended for use with curl!)
 JSON="attributes_str={ \"run-folder\" : ${RUN_FOLDER_NAME},\
-						 \"type\" : "run-folder-archive-thumbnails",\
-						 \"name\" : \"${RUN_FOLDER}.Thumbnail_Images.tar.gz\",\
-						 \"organization\" : \"ANL-SEQ-Core\" }""
+\"type\" : "run-folder-archive-thumbnails",\
+\"name\" : \"${RUN_FOLDER}.Thumbnail_Images.tar.gz\",\
+\"owner\" : \"ANL-SEQ-Core\" \
+}"
 
-#curl -X POST ${AUTH} -F ${JSON} --data-binary ${TMP_TAR_FILE} ${AUTH} ${SHOCK_SERVER}/node
-	done
-done
 
+secure_shock_write "${SJON}" "${TMP_TAR_FILE}"
 
 # clean up
 rm -f ${TMP_TAR_FILE}
@@ -87,7 +152,7 @@ if [[ ${DELETE} == "1" ]]
 then
 	echo "removing Thumbnails in 5 seconds [time for CTRL-C now...]"
 	sleep 5
-#	rm -rf ${RUN_FOLDER}/Thumbnail_images
+	rm -rf ${RUN_FOLDER}/Thumbnail_images
 fi
 
 
