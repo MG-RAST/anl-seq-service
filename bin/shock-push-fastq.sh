@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 # # this script pushes a run folder to shock, creating 3 different subsets
 # 
 # a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN-FOLDER-NAME}.tar.gz
@@ -15,8 +14,7 @@
 # constants
 SHOCK_SERVER="http://shock.metagenomics.anl.gov"
 TMP_TAR_FILE="/var/tmp/temporary-tar-file-shock-client.$$.tar.gz"
-
-# these functions to be use by all scripts 
+rm -f ${TMP_TAR_FILE} # ensure we are not re-using an old tar file
 
 # make sure all files are deleted if we exit prematurely or die
 function clean_up {
@@ -27,73 +25,27 @@ function clean_up {
 }
 trap clean_up SIGHUP SIGINT SIGTERM
 
+# ##############################
+# ##############################
+# include a library of basic functions for SHOCK interaction
+INSTALL_DIR=`dirname $0`
+source ${INSTALL_DIR}/SHOCK_functions.sh
 
-# securely write filename to SHOCK using the JSON information
-# note that the env variable AUTH will provide the authentication 
-function secure_shock_write {
-	JSON=$1
-	FILENAME=$2
-	
-	echo "uploading ${FILENAME} .. "
-								
-		# with file, without using multipart form (not recommended for use with curl!)
-		JSON=`curl --progress-bar -X POST -H "${AUTH}" -F "attributes_str=${JSON}" -F "upload=@${FILENAME}" ${SHOCK_SERVER}/node`
-		# parse the return JSON to find error
-		ERROR_STATUS=`echo ${JSON} | jq -r  '{ error: .error }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ "  `
-		# grab nodeid from JSON return
-			
-		NODE_ID=`echo ${JSON} | jq -r ' { nid: .data.id }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " `
-				
-		# if there is no return JSON and or we see an error status we report and die
-    if [  ${NODE_ID} == "" ]
-			then
-				echo "can't get a node id (${FILENAME})"
-				exit 1		
-		fi
-		
-		# if there is no return JSON and or we see an error status we report and die
-    if [  "${JSON}" == ""  -o   "${ERROR_STATUS}" != "null"  ]
-			then
-				echo "can't get feedback for upload (${FILENAME}, ${ERROR_STATUS})"
-				exit 1		
-		fi
+# ##############################
+# ##############################
+# we could create a file with project wide defaults to set for all scripts
+INSTALL_DIR=`dirname $0`
+if [ -e "${INSTALL_DIR}/PROJECT_settings.sh" ]
+then
+	source ${INSTALL_DIR}/PROJECT_settings.sh
+fi
 
-		echo "done."
-
-		echo "Validating MD5 checksum ... \c"
-		# get MD5 for node ID and validate with local md5
-		NODE_ATTRIBUTES=`curl -s -X GET  -H "${AUTH}" "http://shock.metagenomics.anl.gov/node/${NODE_ID}" `
-		SHOCK_MD5=`echo ${NODE_ATTRIBUTES} | jq -r '{ md5: .data.file.checksum.md5 }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " `
-		
-		if [[ ${SHOCK_MD5} == "" ]] # this needs to check for the correct shock response (status 200?)
-		then
-			echo "$0 could not obtain md5 sum for SHOCK node ${nodeid}"
-			exit 1
-		fi
-		
-		# note this will need to be changed when not running on a Mac 
-		FILE_MD5=`md5 -q ${FILENAME}`		
-		#FILE_MD5=`md5sum $i` # for Linux
-		if [[ ${FILE_MD5} != ${SHOCK_MD5} ]]
-				then
-					echo "$0 MD5 checksum mismatch for ${FILENAME}, aborting (local-md5:(${FILE_MD5}), remote-md5:(${SHOCK_MD5})"
-					exit 1	
-		fi
-		
-		echo "done"
-	}
-
-# #############################################
-# #############################################
-
-
-rm -f ${TMP_TAR_FILE}
-
-
+# usage info 
 function usage () { 
 	echo "Usage: shock-push.sh [-h <help>] [-d] -r <run folder> "
 	echo " -d  delete files after upload"
  }
+
 
 # get options
 while getopts hdr: option; do
@@ -108,13 +60,14 @@ while getopts hdr: option; do
     esac
 done
 
+# make sure the required options are present
 if [[ -z ${RUN_FOLDER} ]]
 then
 	usage
 	exit 1
 fi
 
-# 
+# ensire the run_folder is present
 if [  ! -d ${RUN_FOLDER} ] 
 then
 	echo "$0 ${RUN_FOLDER} not found"
@@ -149,50 +102,67 @@ do
 	sample=`echo $i | awk -F/  '{print $4 }' | sed s/Sample_//g`
 	file=`echo $i | awk -F/  '{print $5 }' `
 
+	# project_id, owner and type are indexed in SHOCK
 	JSON="	{  \
 \"type\" : \"run-folder-archive-fastq\" , \
-\"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
-\"owner\" : \"ANL-SEQ-Core\" , \
+\"project_id\" : \"${RUN_FOLDER_NAME}\" ,\
+\"owner\" : \"${OWNER}\", \
 \"group\" : \"$group\", \
 \"project\" : \"$project\",\
 \"sample\" : \"$sample\",\
 \"name\" : \"$file\"\
 }" 
 
-secure_shock_write "${JSON}" "${i}" 
+	echo "uploading ${i} .. "
+	NODE_ID=$(secure_shock_write "${JSON}" "${i}" )
 
+	# check if the NODE_ID already exists 
+	if [ "${NODE_ID}" == "1" ]
+		then
+				echo "skipped (file already exists)."
+			else
+				echo "done."
+	fi
 done
+# we are done with all FASTQ files
 
 # find SAV files now and tar them
-
 # from documentation SAV files are:  RunInfo.xml, runParameters.xml, SampleSheet.csv, InterOp  (directory)
 SAV_FILES="RunInfo.xml runParameters.xml SampleSheet.csv InterOp/*"
 
 return=`tar cfz ${TMP_TAR_FILE} ${SAV_FILES} `
-
-if [[ $return != "" ]]
+# ensure tar worked
+if [ ! $? -eq 0 ]
 then
 	echo "$0 tar command failed [ $? ] "
 	rm -f ${TMP_TAR_FILE}
 fi
 
-JSON="	{ \"run-folder\" : \"${RUN_FOLDER_NAME}\" , \
-\"type\" : \"run-folder-archive-sav\" , \
-\"name\" : \"${RUN_FOLDER_NAME}-sav.tar.gz\" ,\
-\"owner\" : \"ANL-SEQ-Core\" \
+JSON="{\
+\"type\" : \"run-folder-archive-sav\",\
+\"name\" : \"${RUN_FOLDER_NAME}.sav.tar.gz\",\
+\"project_id\" : \"${RUN_FOLDER_NAME}\",\
+\"owner\" : \"${OWNER}\"\
 }" 
-	
-secure_shock_write "${JSON}" "${TMP_TAR_FILE}"
-						
 
+REAL_FILE_NAME="${RUN_FOLDER_NAME}.sav.tar.gz"
 
-
-if [[ ${DELETE_FILES} == "1" ]]
+echo "uploading SAV-TAR-Archive .. "
+NODE_ID=$(secure_shock_write "${JSON}" "${TMP_TAR_FILE}" "${REAL_FILE_NAME}" )
+# check if the NODE_ID already exists 
+if [ "${NODE_ID}" == "1" ]
 	then
-		cd ${RUN_FOLDER}
+			echo "skipped (file already exists)."
+		else
+			echo "done."
+fi
+
+
+if [ -n "${DELETE}"  ]
+	then
 		echo "removing FASTQ + SAV files in 5 seconds [time for CTRL-C now...]"
 		sleep 5
-		# rm -rf ${SAV_FILES} ${FASTQ_FILES}
+		rm -rf ${SAV_FILES} ${FASTQ_FILES}
 	fi
 
 # cleanup

@@ -27,61 +27,19 @@ function clean_up {
 }
 trap clean_up SIGHUP SIGINT SIGTERM
 
-# securely write filename to SHOCK using the JSON information
-# note that the env variable AUTH will provide the authentication 
-function secure_shock_write {
-	JSON=$1
-	FILENAME=$2
-	
-	echo "uploading ${FILENAME} .. "
-								
-		# with file, without using multipart form (not recommended for use with curl!)
-		JSON=`curl --progress-bar -X POST -H "${AUTH}" -F "attributes_str=${JSON}" -F "upload=@${FILENAME}" ${SHOCK_SERVER}/node`
-		# parse the return JSON to find error
-		ERROR_STATUS=`echo ${JSON} | jq -r  '{ error: .error }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ "  `
-		# grab nodeid from JSON return
-			
-		NODE_ID=`echo ${JSON} | jq -r ' { nid: .data.id }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " `
-				
-		# if there is no return JSON and or we see an error status we report and die
-    if [  ${NODE_ID} == "" ]
-			then
-				echo "can't get a node id (${FILENAME})"
-				exit 1		
-		fi
-		
-		# if there is no return JSON and or we see an error status we report and die
-    if [  "${JSON}" == ""  -o   "${ERROR_STATUS}" != "null"  ]
-			then
-				echo "can't get feedback for upload (${FILENAME}, ${ERROR_STATUS})"
-				exit 1		
-		fi
+# #############################################
+# #############################################
+# #############################################
 
-		echo "done."
+# ##############################
+# ##############################
+# include a library of basic functions for SHOCK interaction
+INSTALL_DIR=`dirname $0`
+source ${INSTALL_DIR}/SHOCK_functions.sh
 
-		echo "Validating MD5 checksum ... \c"
-		# get MD5 for node ID and validate with local md5
-		NODE_ATTRIBUTES=`curl -s -X GET  -H "${AUTH}" "http://shock.metagenomics.anl.gov/node/${NODE_ID}" `
-		SHOCK_MD5=`echo ${NODE_ATTRIBUTES} | jq -r '{ md5: .data.file.checksum.md5 }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " `
-		
-		if [[ ${SHOCK_MD5} == "" ]] # this needs to check for the correct shock response (status 200?)
-		then
-			echo "$0 could not obtain md5 sum for SHOCK node ${nodeid}"
-			exit 1
-		fi
-		
-		# note this will need to be changed when not running on a Mac 
-		FILE_MD5=`md5 -q ${FILENAME}`		
-		#FILE_MD5=`md5sum $i` # for Linux
-		if [[ ${FILE_MD5} != ${SHOCK_MD5} ]]
-				then
-					echo "$0 MD5 checksum mismatch for ${FILENAME}, aborting (local-md5:(${FILE_MD5}), remote-md5:(${SHOCK_MD5})"
-					exit 1	
-		fi
-		
-		echo "done"
-	}
-
+	# #############################################
+	# #############################################
+	# #############################################
 
 function usage  { 
 	echo "Usage: shock-push-raw.sh [-h <help>] [-d] -r <run folder> "
@@ -101,13 +59,13 @@ function usage  {
      esac
  done
 # 
-if [[ -z ${RUN_FOLDER} ]]
+if [ -z ${RUN_FOLDER} ]
 then
 	usage
 	exit 1
 fi
 
-if [[] ! -d ${RUN_FOLDER} ]]
+if [ ! -d ${RUN_FOLDER} ]
 then
 	echo "$0 ${RUN_FOLDER} not found"
 	usage
@@ -115,7 +73,7 @@ then
 fi
 
 # check for presence of RTAComplete.txt
-if [[ ! -e ${RUN_FOLDER}/RTAComplete.txt ]]
+if [ ! -e ${RUN_FOLDER}/RTAComplete.txt ]
 then
 	echo "$0 ${RUN_FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
 	exit 1
@@ -130,21 +88,28 @@ set -e
 # fastq files
 cd ${RUN_FOLDER}
 
+echo  "Obtaining list of files .."
 # build a list of files excluding Thumbnails, FASTQs and SAV files
-FILES=`find ./ -type f | fgrep -v fastq  | fgrep -v Thumbnail_Image | fgrep -v InterOp | fgrep -v RunInfo.xml | fgrep -v runParameters.xml | fgrep -v Samplesheet.csv `
+FILES=`find ./ -type f | fgrep -v fastq  | fgrep -v Thumbnail_Image  `
+# old version that excludes SAV files as well
+#FILES=`find ./ -type f | fgrep -v fastq  | fgrep -v Thumbnail_Image | fgrep -v InterOp | fgrep -v RunInfo.xml | fgrep -v runParameters.xml | fgrep -v Samplesheet.csv `
+echo "done"
 
 # create a tmp file with the filenames
 echo "${FILES}" > ${FILE_NAME_LIST_FILE}
+
+echo  "creating tar file .."
 # tar up the files using a file of filenames
-res=`tar cfz ${TMP_TAR_FILE} -T ${FILE_NAME_LIST_FILE}`
+res=`tar cfz ${TMP_TAR_FILE} -T ${FILE_NAME_LIST_FILE} > /dev/null`
 # check on the return value
-if [ !$? -eq 0 ]
+if [ ! $? -eq 0 ]
 then 
   echo "$0 Could not create raw tar file " >&2
 	# remove the tmp file
 	rm -f ${FILE_NAME_LIST_FILE}
   exit 1	
 fi
+echo "done"
 
 # remove the tmp file
 rm -f ${FILE_NAME_LIST_FILE}
@@ -152,24 +117,32 @@ rm -f ${FILE_NAME_LIST_FILE}
 # echo message about not setting expiry date
 echo "Folker: remember to set automatic expiry data "
 
-JSON="attributes_str={ \"run-folder\" : ${RUN_FOLDER_NAME}, \
-\"type\" : "run-folder-archive-raw", \
+JSON="{ \"type\" : \"run-folder-archive-raw\", \
 \"name\" : \"${RUN_FOLDER-NAME}.raw.tar.gz\", \
-\"organization\" : \"ANL-SEQ-Core\" \
+\"project_id\" : \"${RUN_FOLDER_NAME}\" ,\
+\"owner\" : \"${OWNER}\" \
 }"
 
-secure_shock_write "${JSON}" "${TMP_TAR_FILE}"
+# obtain a node ID ( "-1" if file already exits in SHOCK)
+NODE_ID=$(secure_shock_write "${JSON}" "${TMP_TAR_FILE}" "${RUN_FOLDER_NAME}-run-folder-archive-raw.tar.gz") 
 
-# clean up
-rm -f ${TMP_TAR_FILE}
+# if the file does not already exist, we set an expiration date
+if [ "${NODE_ID}" == "-1" ]
+then
+# set expiration date for RAW files
+echo "setting 60 day expiration date"
+#curl -X PUT -H "${AUTH}" -F "expiration=90D" "${SHOCK_SERVER}/${NODE_ID}"
+fi
 
-if [[ ${DELETE} == "1" ]]
+if [ -n "${DELETE}"  ]
 then
 	echo "removing all files except FASTQ, SAV and Thumbnails in 5 seconds [time for CTRL-C now...]"
 	sleep 5
 	rm -rf ${FILES}
 fi
 
+# clean up existing temp files 
+clean_up
 
 
 
