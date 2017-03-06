@@ -3,10 +3,10 @@
 
 # # this script pushes a run folder to shock, creating 3 different subsets
 # 
-# a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN-FOLDER-NAME}.tar.gz
+# a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN_FOLDER_NAME}.tar.gz
 # b) multiple fastq files and SAV.tar.fz file are stored (the SAV file includes the Samplesheets and other documents required for the Illumina SAV tool)
-# c) thumbnail files (a single tar.gz file): example: ${RUN-FOLDER-NAME}.tumbnails.tar.tgz
-# all 3 files are required to obtain the entire RUN-Folder (note the SAV files are stored twice)
+# c) thumbnail files (a single tar.gz file): example: ${RUN_FOLDER_NAME}.tumbnails.tar.tgz
+# all 3 files are required to obtain the entire RUN_Folder (note the SAV files are stored twice)
 
 
 # constants
@@ -36,7 +36,7 @@ function secure_shock_read {
 	fi
 	
 # now download the file
-	res=`curl -H ${AUTH} GET ${SHOCK-SERVER}/node${file}/?download > ${TARGET_PATH}`
+	res=`curl -H ${AUTH} GET ${SHOCK_SERVER}/node${file}/?download > ${TARGET_PATH}`
 
 # check if we get an error code
 	if [[ $res != 0 ]]
@@ -46,7 +46,7 @@ function secure_shock_read {
 	fi
 
 # get the MD5 to ensure we got the correct file
-	JSON=`curl -H ${AUTH} GET ${SHOCK-SERVER}/node/${file} `
+	JSON=`curl -H ${AUTH} GET ${SHOCK_SERVER}/node/${file} `
 	# if there is no return JSON and or we see an error status we report and die
   if [  "${JSON}" == ""  ] 
 		then
@@ -55,12 +55,12 @@ function secure_shock_read {
 	fi
 	
 	# grab error status from JSON return	
-	SHOCK_MD5=`echo ${JSON} | jq -r '{ md5: .data[].file.checksum.md5` } '		
+	SHOCK_MD5=`echo ${JSON} | jq -r '{ md5: .data[].file.checksum.md5 }' `
 			
 	# if there is no return JSON and or we see an error status we report and die
   if [  ${SHOCK_MD5} == "" ]
 		then
-			echo "can't get an MD5 from SHOCK for (${$i})"
+			echo "can't get an MD5 from SHOCK for (${i})"
 			exit 1		
 	fi
 	
@@ -127,7 +127,7 @@ cd ${RUN_FOLDER}
 # use the JQ tool to parse the correct IDs for the SHOCK objects from the return JSON struct 
 #    the correct invocation is --> jq -r '{ data: .data[].id  } '  <-- 
 
-echo -ne "obtaining list of files for  ${RUN_FOLDER .. "
+echo -ne "obtaining list of files for  ${RUN_FOLDER} .. "
 
 
 FASTQ_FILES_JSON=`
@@ -195,7 +195,7 @@ fi
 
 # now download the file
 	echo -ne "downloading ${filename} .. "
-	res=`curl -H ${AUTH} GET ${SHOCK-SERVER}/node${file}/?download > ${TARGET_PATH}`
+	res=`curl -H ${AUTH} GET ${SHOCK_SERVER}/node${file}/?download > ${TARGET_PATH}`
 
 # check if we get an error code
 	if [[ $res != 0 ]]
@@ -205,7 +205,7 @@ fi
 	fi
 
 # get the MD5 to ensure we got the correct file
-	JSON=`curl -H ${AUTH} GET ${SHOCK-SERVER}/node/${file} `
+	JSON=`curl -H ${AUTH} GET ${SHOCK_SERVER}/node/${file} `
 	# if there is no return JSON and or we see an error status we report and die
   if [  "${JSON}" == ""  ] 
 		then

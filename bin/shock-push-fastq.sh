@@ -2,10 +2,10 @@
 
 # # this script pushes a run folder to shock, creating 3 different subsets
 # 
-# a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN-FOLDER-NAME}.tar.gz
+# a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN_FOLDER_NAME}.tar.gz
 # b) multiple fastq files and SAV.tar.fz file are stored (the SAV file includes the Samplesheets and other documents required for the Illumina SAV tool)
-# c) thumbnail files (a single tar.gz file): example: ${RUN-FOLDER-NAME}.tumbnails.tar.tgz
-# all 3 files are required to obtain the entire RUN-Folder (note the SAV files are stored twice)
+# c) thumbnail files (a single tar.gz file): example: ${RUN_FOLDER_NAME}.tumbnails.tar.tgz
+# all 3 files are required to obtain the entire RUN_Folder (note the SAV files are stored twice)
 # #############################################
 # #############################################
 

@@ -40,7 +40,7 @@ counter=0
 # exit on any error
 set -e 
 
-if { ! ${RUN_FOLDER } }
+if [ ! -e ${RUN_FOLDER} ]
 then
 	echo "$0 RUN_FOLDER not defined"
 	exit 1
