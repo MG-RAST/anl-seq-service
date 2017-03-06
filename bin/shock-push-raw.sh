@@ -3,10 +3,10 @@
 
 # # this script pushes a run folder to shock, creating 3 different subsets
 # 
-# a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN_FOLDER-NAME}.tar.gz
+# a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN_FOLDER_NAME}.tar.gz
 # b) multiple fastq files and SAV.tar.fz file are stored (the SAV file includes the Samplesheets and other documents required for the Illumina SAV tool)
-# c) thumbnail files (a single tar.gz file): example: ${RUN_FOLDER-NAME}.tumbnails.tar.tgz
-# all 3 files are required to obtain the entire RUN-Folder (note the SAV files are stored twice)
+# c) thumbnail files (a single tar.gz file): example: ${RUN_FOLDER_NAME}.tumbnails.tar.tgz
+# all 3 files are required to obtain the entire RUN_Folder (note the SAV files are stored twice)
 
 
 # #############################################
@@ -118,7 +118,7 @@ rm -f ${FILE_NAME_LIST_FILE}
 echo "Folker: remember to set automatic expiry data "
 
 JSON="{ \"type\" : \"run-folder-archive-raw\", \
-\"name\" : \"${RUN_FOLDER-NAME}.raw.tar.gz\", \
+\"name\" : \"${RUN_FOLDER_NAME}.raw.tar.gz\", \
 \"project_id\" : \"${RUN_FOLDER_NAME}\" ,\
 \"owner\" : \"${OWNER}\" \
 }"
