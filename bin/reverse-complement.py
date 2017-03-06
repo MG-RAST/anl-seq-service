@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 
 # Generates reverse complements of a column in a delimited table, and appends the reverse
 # complement as the last column of the table. 
