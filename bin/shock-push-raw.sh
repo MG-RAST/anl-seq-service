@@ -130,8 +130,8 @@ NODE_ID=$(secure_shock_write "${JSON}" "${TMP_TAR_FILE}" "${RUN_FOLDER_NAME}-run
 if [ "${NODE_ID}" == "-1" ]
 then
 # set expiration date for RAW files
-echo "setting 60 day expiration date"
-#curl -X PUT -H "${AUTH}" -F "expiration=90D" "${SHOCK_SERVER}/${NODE_ID}"
+echo "setting 90 day expiration date"
+curl -X PUT -H "${AUTH}" -F "expiration=90" "${SHOCK_SERVER}/${NODE_ID}"
 fi
 
 if [ -n "${DELETE}"  ]

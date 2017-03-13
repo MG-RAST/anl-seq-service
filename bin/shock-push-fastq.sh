@@ -92,6 +92,9 @@ RUN_FOLDER_NAME=`basename ${RUN_FOLDER}`
 cd ${RUN_FOLDER}
 FASTQ_FILES=`find ./ -name \*.fastq\*`
 
+# we might want to check if some files are already uploaded (in case fastq files were regenerated)
+# might take an extra script or an option to replace fastq files for a run-folder
+
 for i in ${FASTQ_FILES}
 do
 	# use Illumina directory structure to extract group (e.g. unaligned), project and sample info.
@@ -149,6 +152,7 @@ REAL_FILE_NAME="${RUN_FOLDER_NAME}.sav.tar.gz"
 
 echo "uploading SAV-TAR-Archive .. "
 NODE_ID=$(secure_shock_write "${JSON}" "${TMP_TAR_FILE}" "${REAL_FILE_NAME}" )
+
 # check if the NODE_ID already exists 
 if [ "${NODE_ID}" == "1" ]
 	then
@@ -168,11 +172,3 @@ if [ -n "${DELETE}"  ]
 # cleanup
 exit 1
 rm -f ${TMP_TAR_FILE}
- 
-
-
-
-
-
-
-

@@ -98,7 +98,7 @@ if [ "${NODE_ID}" == "-1" ]
 then
 # set expiration date for RAW files
 echo "setting 60 day expiration date"
-#curl -X PUT -h "${AUTH}" -F "expiration=90D" "${SHOCK_SERVER}/${NODE_ID}"
+curl -X PUT -h "${AUTH}" -F "expiration=60D" "${SHOCK_SERVER}/${NODE_ID}"
 fi
 
 # clean up
@@ -110,8 +110,6 @@ then
 	sleep 5
 	rm -rf ${RUN_FOLDER}/Thumbnail_images
 fi
-
-
 
 
 

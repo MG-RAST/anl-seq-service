@@ -55,9 +55,8 @@ fi
 
 	# check if file already exists
   #	echo "\n\n\nWE SHOULD DISCUSS ADDING AN MD5 INDEX TO SHOCK <--- Folker says\n\n\n" 
-#	local	RETURN_JSON=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node?querynode&file.name=${FILENAME}&file.checksum.md5=${FILE_MD5}")
-#	local LCOUNT=$(echo "${RETURN_JSON}" | jq -r  '{ total_count: .total_count }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " )
-local LCOUNT=0
+	local	RETURN_JSON=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node?querynode&file.name=${FILENAME}&file.checksum.md5=${FILE_MD5}")
+	local LCOUNT=$(echo "${RETURN_JSON}" | jq -r  '{ total_count: .total_count }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " )
 	if [ ! $LCOUNT -eq 0 ]
 	then
 		# echo "$0 the file ${FILENAME} is already present in SHOCK, not uploading it"
