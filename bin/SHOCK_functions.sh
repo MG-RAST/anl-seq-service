@@ -4,6 +4,16 @@
 # ##############################################
 # ##############################################
 
+
+# 
+# source auth.env file with credentials
+# 
+
+set -o allexport
+source ../auth.env
+set +o allexport
+
+
 # 
 # SHOCK_functions.sh reusable SHELL functions for SHOCK interaction
 # 
@@ -41,8 +51,13 @@ function secure_shock_write {
 	
 	# compute MD5 checksum for the input file
 	# note this will need to be changed when not running on a Mac	
-	local FILE_MD5=`md5 -q ${FILENAME}`		
-	#FILE_MD5=`md5sum $i` # for Linux
+	hosttype=$(uname)
+	if [[ ${hosttype} == "Darwin" ]] 
+	  then
+	local FILE_MD5=$(md5 -q ${FILENAME})  # for mac
+          else
+	FILE_MD5=$(cat ${FILENAME} | md5sum $i | cut -f1 -d\  ) # for Linux
+	fi
 
 # use either the basename or the third argument as the "filename" in SHOCK	
 if [ "${REAL_FILENAME}_x" != "_x" ]
@@ -54,12 +69,11 @@ fi
 
 
 	# check if file already exists
-  #	echo "\n\n\nWE SHOULD DISCUSS ADDING AN MD5 INDEX TO SHOCK <--- Folker says\n\n\n" 
-	local	RETURN_JSON=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node?querynode&file.name=${FILENAME}&file.checksum.md5=${FILE_MD5}")
+	local	RETURN_JSON=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node?querynode&file.name=${BASE_FILENAME}&file.checksum.md5=${FILE_MD5}")
 	local LCOUNT=$(echo "${RETURN_JSON}" | jq -r  '{ total_count: .total_count }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " )
 	if [ ! $LCOUNT -eq 0 ]
 	then
-		# echo "$0 the file ${FILENAME} is already present in SHOCK, not uploading it"
+		#echo "$0 function secure_shock_write:: the file ${FILENAME} is already present in SHOCK, not uploading it"
 		echo 1
 	else
 		# the file does not exist in SHOCK, we continue processing
@@ -75,7 +89,7 @@ fi
 		# if there is no return JSON and or we see an error status we report and die
     if [  ${NODE_ID} == "" ]
 			then
-				echo "can't get a node id (${FILENAME})"
+				echo "can't get a node id (${FILENAME})" >&2
 				exit 1		
 		fi
 		
@@ -106,7 +120,7 @@ fi
 		
 		echo "${NODE_ID}"
 	fi
-	}
+}
 
 # #############################################
 # #############################################
