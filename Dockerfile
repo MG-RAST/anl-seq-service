@@ -24,7 +24,7 @@ RUN  apt-get install -y \
   # download URL for the version 2.18 of the Illumina software
 # http://support.illumina.com/content/dam/illumina-support/documents/downloads/software/bcl2fastq/bcl2fastq2-v2-18-0-12-linux-x86-64.zip
 ADD https://support.illumina.com/content/dam/illumina-support/documents/downloads/software/bcl2fastq/bcl2fastq2-v2-19-1-linux.zip /root/bcl2fastq2.zip
-RUN  (cd /root ; unzip /root/bcl2fastq2.zip )
+RUN  (cd /root ; unzip /root/bcl2fastq2*.zip )
 RUN alien -i /root/bcl2fastq2-*.rpm
 
 
