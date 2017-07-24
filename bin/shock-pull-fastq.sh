@@ -13,59 +13,76 @@
 SHOCK_SERVER="http://shock.metagenomics.anl.gov"
 TMP_FILE="/var/tmp/$$.shock_read_tmp_file.$$"
 
+# ##############################
+# ##############################
+# include a library of basic functions for SHOCK interaction
+INSTALL_DIR=`dirname $0`
+source ${INSTALL_DIR}/SHOCK_functions.sh
 
-# ##############################################
-# ##############################################
-# ##############################################
+# ##############################
+# ##############################
+# we could create a file with project wide defaults to set for all scripts
+if [ -e "${INSTALL_DIR}/PROJECT_settings.sh" ]
+then
+	source ${INSTALL_DIR}/PROJECT_settings.sh
+fi
+
+#
+# source auth.env file with credentials
+# from either HOME DIR (priority) or install dir
+set -o allexport
+if [[ -e ${HOME}/.shock-auth.env ]]
+then
+  source ${INSTALL_DIR}/auth.env    
+elif [[ -e ${INSTALL_DIR}/auth.env ]]
+then
+  source ${INSTALL_DIR}/auth.env  
+fi
+set +o allexport
+
+
+# ##############################
+# ##############################
+# ##############################
+# ##############################
+
 function secure_shock_read {
-	local JSON=$1
-	local FILENAME=$2
+	local REMOTE_MD5=$1
+	local NODE_ID=$2
+  local TARGET_PATH=$3
  	
 	# need to check for presence of parameters 
 	# if there is no  JSON or FILENAME or the file is not readable
-  if [  [ "${JSON}_x" == "_x" ]  ]
+  if  [[ "${NODE_ID}_x" == "_x" ]]
 		then
-			echo "$0 function secure_shock_read:: missing JSON parameters"
+			echo "$0 function secure_shock_read:: missing NODE_ID"
 			exit 1		
 	fi
 	
-	if [ [ "${FILENAME}_x" == "_x" ]  ]   # we might want to test if we can create the file .. -o  [ -w "${FILENAME}" ] ]
+	if [[ "${REMOTE_MD5}_x" == "_x" ]]   # we might want to test if we can create the file .. -o  [ -w "${FILENAME}" ] ]
 	then
-		echo "$0 function secure_shock_read:: missing filename"
+		echo "$0 function secure_shock_read:: missing MD5 checksum"
 		exit 1
 	fi
 	
 # now download the file
-	res=`curl -H ${AUTH} GET ${SHOCK_SERVER}/node${file}/?download > ${TARGET_PATH}`
+	res=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node/${NODE_ID}/?download" > ${TARGET_PATH})
+  
+	# compute MD5 checksum for the input file
+	# note this will need to be changed when not running on a Mac	
+	FILE_MD5=$(md5sum -b ${TARGET_PATH} | cut -f1 -d\  ) # for Linux
 
-# check if we get an error code
-	if [[ $res != 0 ]]
-		then
-			echo "download failed ($filename)"
-			exit 1
-	fi
-
-# get the MD5 to ensure we got the correct file
-	JSON=`curl -H ${AUTH} GET ${SHOCK_SERVER}/node/${file} `
-	# if there is no return JSON and or we see an error status we report and die
-  if [  "${JSON}" == ""  ] 
-		then
-			echo "can't get feedback for upload (${FILENAME}, ${ERROR_STATUS})"
-			exit 1		
-	fi
-	
-	# grab error status from JSON return	
-	SHOCK_MD5=`echo ${JSON} | jq -r '{ md5: .data[].file.checksum.md5 }' `
-			
-	# if there is no return JSON and or we see an error status we report and die
-  if [  ${SHOCK_MD5} == "" ]
-		then
-			echo "can't get an MD5 from SHOCK for (${i})"
-			exit 1		
-	fi
-	
-	# return the remote MD5 fingerprint
-	echo ${SHOCK_MD5}
+  # return _SHICK_ERROR if MD5 sums don't match
+  if [[ ${FILE_MD5} != ${REMOTE_MD5} ]]
+  then
+    echo "SHOCK_ERROR"
+    exit 1
+  	# for now
+#    echo "$0 MD5 checksum mismatch for ${FILENAME}, aborting (local-md5:(${FILE_MD5}), remote-md5:(${REMOTE_MD5})"
+  else 
+	  # return the remote MD5 fingerprint
+	  echo ${FILE_MD5}
+  fi
 }
 
 
@@ -83,24 +100,15 @@ trap clean_up SIGHUP SIGINT SIGTERM
 rm -f ${TMP_TAR_FILE}
 
 function usage { 
-echo "restore Illumina runs from SHOCK archive"
 echo "Usage: $0 [-h <help>] [a|t|r|f] -r <run folder> "
-echo "-t -- just thumbails"
-echo "-x -- just raw"
-echo "-f -- just FASTQ files and SAV files"
-echo "-a -- all files"
- }
+}
 
 # get options
-while getopts afthr: option; do
+while getopts hr: option; do
     case "${option}"
         in
 		h) HELP=1;;
 		r) RUN_FOLDER=${OPTARG};;
-	a)	TASK=a;;
-	f)	TASK=f;;
-	x)	TASK=r;;
-	t)	TASK=t;;
 		*)
 		usage
 		;;
@@ -108,10 +116,10 @@ while getopts afthr: option; do
 done
 
 # make sure we have at least a run folder name
-if [ -z ${RUN_FOLDER} -o -z ${TASK} ]
+if [[ -z ${RUN_FOLDER} ]]
 then
-usage
-exit 1
+  usage
+  exit 1
 fi
 
 # exit on any error
@@ -127,118 +135,91 @@ cd ${RUN_FOLDER}
 # use the JQ tool to parse the correct IDs for the SHOCK objects from the return JSON struct 
 #    the correct invocation is --> jq -r '{ data: .data[].id  } '  <-- 
 
-echo -ne "obtaining list of files for  ${RUN_FOLDER} .. "
 
+echo "obtaining list of files for  ${RUN_FOLDER} .. \c"
 
-FASTQ_FILES_JSON=`
-curl -X GET -H "S{AUTH}" "${SHOCK_SERVER}/node/node/order=created_on&direction=desc&offsEt=0&querynode&attributes.data_type=run-folder-archive-fastq&project_id=${RUN_FOLDER}"  `
-
-# sample jq output
-# {
-#  "data": "5c44f98b-a83f-4320-ac30-abdcad64c7fa",
-#  "name": "error",
-#  "md5": "b0343349b7f7b3ab6550c649a3299a9d",
-#  "length": 376,
-#  "owner": "anonymous"
-# }
-
+FASTQ_FILES_JSON=$(
+curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node?query&type=run-folder-archive-fastq&project_id=${RUN_FOLDER}"  )
 echo " done"
 
-#FASTQ_FILES_IDS=echo "${FASTQ_FILES_JSON}" | jq -r '{ data: .data[].id  } ' | tr -d " {}\"" | fgrep data | cut -f2 -d:
-#USE JQ to parse JSON install via "wget -O jq https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64"
+# create a flat list
+FASTQ_FILES_IDS=$(echo "${FASTQ_FILES_JSON}" | jq  -r ' { node: .data[].id } ' | IFS='}' cut -d: -f2 | tr -d '}{\n"' )
 
-# parse filename, project, group, sample , md5 and length from JSON struct
-PARSED_JSON= `echo ${FASTQ_FILES_JSON} | jq -r '{ data: .data[] .id , name: .data[].file.name , md5: .data[].file.checksum.md5 , length: .data[].file.size, project: .data[].attributes.project , group: .data[].attributes.group , sample: .data[].attributes.sample}  ' |  awk '  BEGIN { RS="\}" } { print  $3 $5 $7 $9 } ' ` | tr -d "\" `
+echo "Found $(echo ${FASTQ_FILES_IDS} | wc -w) Files"
 
-for i in ${PARSED_JSON}
+# walk thru all the FASTQ files, tar file later
+for  NODE_ID in ${FASTQ_FILES_IDS}
 do
+  #set -xv
+  # obtain info about the node
+  NODE_JSON=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node/${NODE_ID}" )
 	
-	# this could be done cleaner and more robust with jq
-	NODE_ID=$(echo $i | awk -F/  '{print $1 }'  )
+#  echo "${NODE_JSON}" | jq '.'
+
+	## parse additional project specific fields
+	filename=$(echo $NODE_JSON | jq '  .data.file.name  ' | tr -d '""') 
+  SHOCK_MD5=$(echo ${NODE_JSON} | jq ' .data.file.checksum.md5 ' | tr -d '""')
+  group=$(echo ${NODE_JSON} | jq ' .data.attributes.group  '| tr -d '""')
+  project=$(echo ${NODE_JSON} | jq ' .data.attributes.project  '| tr -d '""') # prepend Project_
+  sample=$(echo ${NODE_JSON} | jq ' .data.attributes.sample  '| tr -d '""')  # prepend Sample_
+
+  echo "group: ${group} sample: ${sample} project: ${project}"
+  
+  exit
+
+# read file and compare MD5s 
+echo "$0 downloading ${filename} with MD5 ${SHOCK_MD5} .. \c"
+
+   RET_VAL=$(secure_shock_read ${SHOCK_MD5} ${NODE_ID} ${TMP_FILE})
+     
+   if [[ ${RET_VAL} == "SHOCK_ERROR" ]]
+   then
+     echo "failed"
+     echo "$0 cannot read SHOCK node ${NODE_ID} for file: ${filename}"
+   else  
+     echo "done"
+  	# where does the file need to go
+  	declare TARGET_PATH=${project}/${sample}/${filename}
 	
-	FILE_NAME=$(secure_shock_read $JSON $NODE_ID)
-	
-	# if we find a tar file go ahead and unpack it
-	if ( echo ${FILE_NAME} | fgrep tar.gz )
-	then
-		tar xf ${FILE_NAME}
-		rm -f ${FILE_NAME}
-	fi
-	
-	# parse additional project specific fields
-	filename=`echo $i | awk -F/  '{print $2 }'  `
-	SHOCK_MD5=`echo $i | awk -F/  '{print $3 }'  `
-	group=`echo $i | awk -F/  '{print $2 }' `
-	sample="Sample_"`echo $i | awk -F/  '{print $4 }' | sed s/Sample_//g`
-	project="Project_"`echo $i | awk -F/  '{print $3 }' | sed s/Project_//g`
-
-
-REMOTE_MD5=$(secure_shock_read ${JSON} ${TMP_FILE})
-
-# check md5
-# compute MD5 checksum for the input file
-# note this will need to be changed when not running on a Mac	
-FILE_MD5=`md5 -q ${TMP_FILE}`		
-#FILE_MD5=`md5sum $i` # for Linux
-if [[ ${FILE_MD5} != ${SHOCK_MD5} ]]
-		then
-			echo "$0 MD5 checksum mismatch for ${FILENAME}, aborting (local-md5:(${FILE_MD5}), remote-md5:(${SHOCK_MD5})"
-			exit 1	
-fi
-
-
-	# where does the file need to go
-	TARGET_PATH=${project}/${project}/${sample}/${filename}
-	
-	# make sure the target path exists 
-	mkdir -p ${sample}/${project}/${sample}
-
-# now download the file
-	echo -ne "downloading ${filename} .. "
-	res=`curl -H ${AUTH} GET ${SHOCK_SERVER}/node${file}/?download > ${TARGET_PATH}`
-
-# check if we get an error code
-	if [[ $res != 0 ]]
-		then
-			echo "download failed ($filename)"
-			exit 1
-	fi
-
-# get the MD5 to ensure we got the correct file
-	JSON=`curl -H ${AUTH} GET ${SHOCK_SERVER}/node/${file} `
-	# if there is no return JSON and or we see an error status we report and die
-  if [  "${JSON}" == ""  ] 
-		then
-			echo "can't get feedback for upload (${FILENAME}, ${ERROR_STATUS})"
-			exit 1		
-	fi
-	
-	# grab error status from JSON return	
-	SHOCK_MD5=`echo ${JSON} | jq -r '{ md5: .data[].file.checksum.md5` } '		
-			
-	# if there is no return JSON and or we see an error status we report and die
-  if [  ${SHOCK_MD5} == "" ]
-		then
-			echo "can't get an MD5 from SHOCK for (${$i})"
-			exit 1		
-	fi
-	
-	echo "done"
-
+  	# make sure the target path exists 
+  	mkdir -p ${sample}/${project}/${sample}
+    mv ${TMP_FILE} ${TARGET_PATH}
+ fi
 done
 
+set -xv
+# now handle the sav.tar.gz file
+TAR_FILE_JSON=$(
+curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node?query&type=run-folder-archive-sav&project_id=${RUN_FOLDER}"  )
 
+# create a flat list
+NODE_ID=$(echo "${TAR_FILE_JSON}" | jq  -r ' { node: .data[].id } ' | IFS='}' cut -d: -f2 | tr -d '}{\n" ' )
 
+  # obtain info about the node
+  NODE_JSON=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node/${NODE_ID}" )
+	
+#  echo "${NODE_JSON}" | jq '.'
 
-# find SAV files now and tar them
-TMP_TAR_FILE= ""    # get from SHOCK
+	## parse additional project specific fields
+	filename=$(echo $NODE_JSON | jq '  .data.file.name  ' | tr -d '""') 
+  SHOCK_MD5=$(echo ${NODE_JSON} | jq ' .data.file.checksum.md5 ' | tr -d '""')
 
-# extract SAV files
-return=`tar xfz ${TMP_TAR_FILE}  `
-if [[ $return != "" ]]
-then
-echo "$0 tar command failed [ $? ] "
-rm -f ${TMP_TAR_FILE}
+  RET_VAL=$(secure_shock_read ${NODE_ID} ${SHOCK_MD5}  ${TMP_FILE})
+    
+if [[ ${RET_VAL} == "SHOCK_ERROR" ]]
+  then
+    echo "failed"
+    echo "$0 cannot read SHOCK node ${NODE_ID} for file: ${filename}"
+  else  
+    echo "done"
+
+ # extract SAV files
+  return=`tar xfz ${TMP_FILE}  `
+  if [[ $return != "" ]]
+  then
+  echo "$0 tar command failed [ $? ] "
+  rm -f ${TMP_FILE}
+  fi
 fi
 
 # cleanup 

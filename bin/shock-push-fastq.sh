@@ -34,11 +34,24 @@ source ${INSTALL_DIR}/SHOCK_functions.sh
 # ##############################
 # ##############################
 # we could create a file with project wide defaults to set for all scripts
-INSTALL_DIR=`dirname $0`
 if [ -e "${INSTALL_DIR}/PROJECT_settings.sh" ]
 then
 	source ${INSTALL_DIR}/PROJECT_settings.sh
 fi
+
+#
+# source auth.env file with credentials
+# from either HOME DIR (priority) or install dir
+set -o allexport
+if [[ -e ${HOME}/.shock-auth.env ]]
+then
+  source ${INSTALL_DIR}/auth.env    
+elif [[ -e ${INSTALL_DIR}/auth.env ]]
+then
+  source ${INSTALL_DIR}/auth.env  
+fi
+set +o allexport
+
 
 # usage info 
 function usage () { 
@@ -46,8 +59,7 @@ function usage () {
 	echo " -d  delete files after upload"
  }
 
-
-# get options
+ # get options
 while getopts hdr: option; do
     case "${option}"
         in
@@ -90,20 +102,36 @@ RUN_FOLDER_NAME=`basename ${RUN_FOLDER}`
 
 # fastq files
 cd ${RUN_FOLDER}
-FASTQ_FILES=`find ./ -name \*.fastq\*`
+FASTQ_FILES=$(find ./ -name \*.fastq\*)
 
 # we might want to check if some files are already uploaded (in case fastq files were regenerated)
 # might take an extra script or an option to replace fastq files for a run-folder
 
+set -xv
 for i in ${FASTQ_FILES}
 do
-	# use Illumina directory structure to extract group (e.g. unaligned), project and sample info.
-	# ./unaligned/Project_AR3/Sample_AR314/AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
-	#    group        project      sample    name
-	group=`echo $i | awk -F/  '{print $2 }' `
-	project=`echo $i | awk -F/  '{print $3 }' | sed s/Project_//g`
-	sample=`echo $i | awk -F/  '{print $4 }' | sed s/Sample_//g`
-	file=`echo $i | awk -F/  '{print $5 }' `
+  # multiple directory structures need to be handled; 
+	# use Illumina directory structure  to extract group (e.g. unaligned), project and sample info.
+	# ./unaligned /Project_AR3             /Sample_AR314       /AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
+	#    group    project                  sample              name
+  # ./Data      /Intensities/            BaseCalls          ###  /161215_Misc_fastqs /Undetermined_S0_L001_R2_001.fastq.gz
+  
+  # use the last 3 directory names in sample, project and group (complete path is below)
+  # strip out Data/Intensities/Basecalls 
+  # fill with default value if empty ('-')
+   DIR_NAME=$(dirname "$i" | sed 's#/Data/Intensities/BaseCalls##g' )
+   DIR_NAME2=$(dirname $DIR_NAME)
+   DIR_NAME3=$(dirname $DIR_NAME2)
+
+   sample=$(basename ${DIR_NAME})
+   project=$(basename ${DIR_NAME2} )
+   group=$(basename ${DIR_NAME3})
+
+   # this is the catch all all dirname path components as JSON array
+#  path= ['blah', 'blub']
+
+
+  echo "group: ${group} sample: ${sample} project: ${project}"
 
 	# project_id, owner and type are indexed in SHOCK
 	JSON="	{  \

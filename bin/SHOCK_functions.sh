@@ -5,14 +5,6 @@
 # ##############################################
 
 
-# 
-# source auth.env file with credentials
-# 
-
-set -o allexport
-source ../auth.env
-set +o allexport
-
 
 # 
 # SHOCK_functions.sh reusable SHELL functions for SHOCK interaction
@@ -47,17 +39,9 @@ function secure_shock_write {
 		echo "$0 function secure_shock_write:: file unreadable (${FILENAME})"
 		exit 1
 	fi
-	
-	
+		
 	# compute MD5 checksum for the input file
-	# note this will need to be changed when not running on a Mac	
-	hosttype=$(uname)
-	if [[ ${hosttype} == "Darwin" ]] 
-	  then
-	local FILE_MD5=$(md5 -q ${FILENAME})  # for mac
-          else
-	FILE_MD5=$(cat ${FILENAME} | md5sum $i | cut -f1 -d\  ) # for Linux
-	fi
+	FILE_MD5=$(md5sum -b ${FILENAME} | cut -f1 -d\  ) 
 
 # use either the basename or the third argument as the "filename" in SHOCK	
 if [ "${REAL_FILENAME}_x" != "_x" ]

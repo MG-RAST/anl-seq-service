@@ -30,6 +30,35 @@ trap clean_up SIGHUP SIGINT SIGTERM
 # include a library of basic functions for SHOCK interaction
 INSTALL_DIR=`dirname $0`
 source ${INSTALL_DIR}/SHOCK_functions.sh
+
+# ##############################
+# ##############################
+# we could create a file with project wide defaults to set for all scripts
+if [ -e "${INSTALL_DIR}/PROJECT_settings.sh" ]
+then
+	source ${INSTALL_DIR}/PROJECT_settings.sh
+fi
+
+#
+# source auth.env file with credentials
+# from either HOME DIR (priority) or install dir
+set -o allexport
+if [[ -e ${HOME}/.shock-auth.env ]]
+then
+  source ${INSTALL_DIR}/auth.env    
+elif [[ -e ${INSTALL_DIR}/auth.env ]]
+then
+  source ${INSTALL_DIR}/auth.env  
+fi
+set +o allexport
+
+
+# ##############################
+# ##############################
+# ##############################
+# ##############################
+
+
 rm -f ${TMP_TAR_FILE}
 
 
