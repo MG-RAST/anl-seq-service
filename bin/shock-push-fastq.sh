@@ -109,31 +109,32 @@ FASTQ_FILES=$(find ./ -name \*.fastq\*)
 
 for i in $FASTQ_FILES
 do
-  # multiple directory structures need to be handled; 
-	# use Illumina directory structure  to extract group (e.g. unaligned), project and sample info.
-	# ./unaligned /Project_AR3             /Sample_AR314       /AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
-	#    group    project                  sample              name
-  # ./Data      /Intensities/            BaseCalls          ###  /161215_Misc_fastqs /Undetermined_S0_L001_R2_001.fastq.gz
-  
-  # use the last 3 directory names in sample, project and group (complete path is below)
-  # strip out Data/Intensities/Basecalls 
-  # fill with default value if empty ('-')
-   DIR_NAME=$(dirname "$i" | sed 's#/Data/Intensities/BaseCalls##g' )
-   DIR_NAME2=$(dirname $DIR_NAME)
-   DIR_NAME3=$(dirname $DIR_NAME2)
+echo "working on $i"
+        # use Illumina directory structure to extract group (e.g. unaligned), project and sample info.
+        # RUN_DIR/unaligned/Project_AR3/Sample_AR314/AR314_GGAACT_L003_R1_001.fastq.gz  [sample $i]
+        #          group        project      sample    name
+        group=`echo $i | awk -F/  '{print $2 }' `
+        project=`echo $i | awk -F/  '{print $3 }' | sed s/Project_//g`
+        sample=`echo $i | awk -F/  '{print $4 }' | sed s/Sample_//g`
 
-   sample=$(basename ${DIR_NAME})
-   project=$(basename ${DIR_NAME2} )
-   group=$(basename ${DIR_NAME3})
+# nesting structure varies between old and new and HiSeq and MiSeq
 
-   # this is the catch all all dirname path components as JSON array
-#  path= ['blah', 'blub']
+# detect and handle this case
+# RUN_DIR/Data/Intensities/BaseCalls/McDermott_16S/Undetermined_S0_L001_I1_001.fastq.gz
+# RUN_DIR/Data/Intensities/BaseCalls/170606_Gomes_fastqs/Undetermined_S0_L001_R2_001.fastq.gz
+# RUN_DIR/Data/Intensities/BaseCalls/Halverson_\ Run_1/Undetermined_S0_L001_I1_001.fastq.gz
+#         group   project   sample                          name
+#         2       3         4             5                 6
+        if [ ${project} == "Intensities" ] 
+                then # handle new / miseq style
+                        project=`echo $i | awk -F/  '{print $5 }' `
+                        file=`echo $i | awk -F/  '{print $6 }' `
+                else # old default
+                        file=`echo $i | awk -F/  '{print $5 }' `
+        fi
 
-
-  echo "group: ${group} sample: ${sample} project: ${project}"
-
-	# project_id, owner and type are indexed in SHOCK
-	JSON="	{  \
+        # project_id, owner and type are indexed in SHOCK
+        JSON="  {  \
 \"type\" : \"run-folder-archive-fastq\" , \
 \"project_id\" : \"${RUN_FOLDER_NAME}\" ,\
 \"owner\" : \"${OWNER}\", \
