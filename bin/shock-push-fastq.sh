@@ -107,8 +107,7 @@ FASTQ_FILES=$(find ./ -name \*.fastq\*)
 # we might want to check if some files are already uploaded (in case fastq files were regenerated)
 # might take an extra script or an option to replace fastq files for a run-folder
 
-set -xv
-for i in ${FASTQ_FILES}
+for i in $FASTQ_FILES
 do
   # multiple directory structures need to be handled; 
 	# use Illumina directory structure  to extract group (e.g. unaligned), project and sample info.
