@@ -29,7 +29,7 @@ trap clean_up SIGHUP SIGINT SIGTERM
 # ##############################
 # include a library of basic functions for SHOCK interaction
 # binary location from http://stackoverflow.com/questions/59895/can-a-bash-script-tell-what-directory-its-stored-in
-INSTALL_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+BIN=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
 if [ -z ${SOURCES+x} ]; then
 

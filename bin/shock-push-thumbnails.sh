@@ -28,7 +28,7 @@ trap clean_up SIGHUP SIGINT SIGTERM
 # ##############################
 # ##############################
 # include a library of basic functions for SHOCK interaction
-INSTALL_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+BIN=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
 if [ -z ${SOURCES+x} ]; then
 
