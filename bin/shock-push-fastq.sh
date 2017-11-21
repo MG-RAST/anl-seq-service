@@ -33,7 +33,7 @@ BIN=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
 if [ -z ${SOURCES+x} ]; then
 
-        SOURCE_CONFIG=${BIN}/../SHOCK_functions.sh
+        SOURCE_CONFIG=${BIN}/SHOCK_functions.sh
 
         if [ ! -e ${SOURCE_CONFIG} ]; then
                 echo "source config file ${SOURCE_CONFIG} not found"

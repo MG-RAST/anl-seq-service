@@ -16,7 +16,8 @@ TMP_FILE="/var/tmp/$$.shock_read_tmp_file.$$"
 # ##############################
 # ##############################
 # include a library of basic functions for SHOCK interaction
-INSTALL_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+BIN=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+INSTALL_DIR=${BIN}/../
 
 if [ -z ${SOURCES+x} ]; then
 
