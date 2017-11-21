@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # # this script pushes a run folder to shock, creating 3 different subsets
-# 
+#
 # a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN_FOLDER_NAME}.tar.gz
 # b) multiple fastq files and SAV.tar.fz file are stored (the SAV file includes the Samplesheets and other documents required for the Illumina SAV tool)
 # c) thumbnail files (a single tar.gz file): example: ${RUN_FOLDER_NAME}.tumbnails.tar.tgz
@@ -28,8 +28,23 @@ trap clean_up SIGHUP SIGINT SIGTERM
 # ##############################
 # ##############################
 # include a library of basic functions for SHOCK interaction
-INSTALL_DIR=`dirname $0`
-source ${INSTALL_DIR}/SHOCK_functions.sh
+# binary location from http://stackoverflow.com/questions/59895/can-a-bash-script-tell-what-directory-its-stored-in
+INSTALL_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+if [ -z ${SOURCES+x} ]; then
+
+        SOURCE_CONFIG=${BIN}/../SHOCK_functions.sh
+
+        if [ ! -e ${SOURCE_CONFIG} ]; then
+                echo "source config file ${SOURCE_CONFIG} not found"
+                exit 1
+        fi
+
+        source ${SOURCE_CONFIG} # this defines ${SOURCES}
+
+fi
+
+
 
 # ##############################
 # ##############################
@@ -45,16 +60,16 @@ fi
 set -o allexport
 if [[ -e ${HOME}/.shock-auth.env ]]
 then
-  source ${INSTALL_DIR}/auth.env    
+  source ${INSTALL_DIR}/auth.env
 elif [[ -e ${INSTALL_DIR}/auth.env ]]
 then
-  source ${INSTALL_DIR}/auth.env  
+  source ${INSTALL_DIR}/auth.env
 fi
 set +o allexport
 
 
-# usage info 
-function usage () { 
+# usage info
+function usage () {
 	echo "Usage: shock-push.sh [-h <help>] [-d] -r <run folder> "
 	echo " -d  delete files after upload"
  }
@@ -80,7 +95,7 @@ then
 fi
 
 # ensire the run_folder is present
-if [  ! -d ${RUN_FOLDER} ] 
+if [  ! -d ${RUN_FOLDER} ]
 then
 	echo "$0 ${RUN_FOLDER} not found"
 	usage
@@ -88,16 +103,16 @@ then
 fi
 
 # check for presence of RTAComplete.txt
-if [ ! -e ${RUN_FOLDER}/RTAComplete.txt ] 
+if [ ! -e ${RUN_FOLDER}/RTAComplete.txt ]
 then
 	echo "$0 ${RUN_FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
 	exit 1
-fi	
+fi
 
 # exit on any error
-set -e 
+set -e
 
-# strip the prefix of the run folder to get the name 
+# strip the prefix of the run folder to get the name
 RUN_FOLDER_NAME=`basename ${RUN_FOLDER}`
 
 # fastq files
@@ -125,7 +140,7 @@ echo "working on $i"
 # RUN_DIR/Data/Intensities/BaseCalls/Halverson_\ Run_1/Undetermined_S0_L001_I1_001.fastq.gz
 #         group   project   sample                          name
 #         2       3         4             5                 6
-        if [ ${project} == "Intensities" ] 
+        if [ ${project}A == "IntensitiesA" ]
                 then # handle new / miseq style
                         project=`echo $i | awk -F/  '{print $5 }' `
                         file=`echo $i | awk -F/  '{print $6 }' `
@@ -142,12 +157,12 @@ echo "working on $i"
 \"project\" : \"$project\",\
 \"sample\" : \"$sample\",\
 \"name\" : \"$file\"\
-}" 
+}"
 
 	echo "uploading ${i} .. "
 	NODE_ID=$(secure_shock_write "${JSON}" "${i}" )
 
-	# check if the NODE_ID already exists 
+	# check if the NODE_ID already exists
 	if [ "${NODE_ID}" == "1" ]
 		then
 				echo "skipped (file already exists)."
@@ -174,14 +189,14 @@ JSON="{\
 \"name\" : \"${RUN_FOLDER_NAME}.sav.tar.gz\",\
 \"project_id\" : \"${RUN_FOLDER_NAME}\",\
 \"owner\" : \"${OWNER}\"\
-}" 
+}"
 
 REAL_FILE_NAME="${RUN_FOLDER_NAME}.sav.tar.gz"
 
 echo "uploading SAV-TAR-Archive .. "
 NODE_ID=$(secure_shock_write "${JSON}" "${TMP_TAR_FILE}" "${REAL_FILE_NAME}" )
 
-# check if the NODE_ID already exists 
+# check if the NODE_ID already exists
 if [ "${NODE_ID}" == "1" ]
 	then
 			echo "skipped (file already exists)."

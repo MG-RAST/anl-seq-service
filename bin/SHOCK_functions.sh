@@ -41,7 +41,7 @@ function secure_shock_write {
 	fi
 		
 	# compute MD5 checksum for the input file
-	FILE_MD5=$(md5sum -b ${FILENAME} | cut -f1 -d\  ) 
+	FILE_MD5=$(gunzip -c ${FILENAME} | md5sum | cut -f1 -d\  ) 
 
 # use either the basename or the third argument as the "filename" in SHOCK	
 if [ "${REAL_FILENAME}_x" != "_x" ]
