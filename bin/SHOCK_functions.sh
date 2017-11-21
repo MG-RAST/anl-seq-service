@@ -70,7 +70,7 @@ fi
 		# the file does not exist in SHOCK, we continue processing
 
 		#
-		local JSON=$(curl --progress-bar -X POST -H "${AUTH}" -F "attributes_str=${INPUT_JSON}" -F "file_name=${BASE_FILENAME}" -F "upload=@${FILENAME}" ${SHOCK_SERVER}/node)
+		local JSON=$(curl --progress-bar -X POST -H "${AUTH}" -F "attributes_str=${INPUT_JSON}" -F "file_name=${BASE_FILENAME}" -F "gzip=@${FILENAME}" ${SHOCK_SERVER}/node)
 		# parse the return JSON to find error
 		local ERROR_STATUS=$(echo ${JSON} | jq -r  '{ error: .error }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ "  )
 		# grab nodeid from JSON return

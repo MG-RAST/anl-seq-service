@@ -30,6 +30,7 @@ trap clean_up SIGHUP SIGINT SIGTERM
 # include a library of basic functions for SHOCK interaction
 # binary location from http://stackoverflow.com/questions/59895/can-a-bash-script-tell-what-directory-its-stored-in
 BIN=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+INSTALL_DIR=${BIN}/../
 
 if [ -z ${SOURCES+x} ]; then
 
@@ -117,7 +118,7 @@ RUN_FOLDER_NAME=`basename ${RUN_FOLDER}`
 
 # fastq files
 cd ${RUN_FOLDER}
-FASTQ_FILES=$(find ./ -name \*.fastq\*)
+FASTQ_FILES=($(find ./ -name \*.fastq\*))
 
 # we might want to check if some files are already uploaded (in case fastq files were regenerated)
 # might take an extra script or an option to replace fastq files for a run-folder
