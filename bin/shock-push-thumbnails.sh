@@ -2,7 +2,7 @@
 
 
 # # this script pushes a run folder to shock, creating 3 different subsets
-# 
+#
 # a) entire run folder (minus fastq files and minus thumbnails); a single tar.gz file ${RUN_FOLDER_NAME}.tar.gz
 # b) multiple fastq files and SAV.tar.fz file are stored (the SAV file includes the Samplesheets and other documents required for the Illumina SAV tool)
 # c) thumbnail files (a single tar.gz file): example: ${RUN_FOLDER_NAME}.tumbnails.tar.tgz
@@ -28,8 +28,20 @@ trap clean_up SIGHUP SIGINT SIGTERM
 # ##############################
 # ##############################
 # include a library of basic functions for SHOCK interaction
-INSTALL_DIR=`dirname $0`
-source ${INSTALL_DIR}/SHOCK_functions.sh
+INSTALL_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+if [ -z ${SOURCES+x} ]; then
+
+        SOURCE_CONFIG=${BIN}/../SHOCK_functions.sh
+
+        if [ ! -e ${SOURCE_CONFIG} ]; then
+                echo "source config file ${SOURCE_CONFIG} not found"
+                exit 1
+        fi
+
+        source ${SOURCE_CONFIG} # this defines ${SOURCES}
+
+fi
 
 # ##############################
 # ##############################
@@ -45,10 +57,10 @@ fi
 set -o allexport
 if [[ -e ${HOME}/.shock-auth.env ]]
 then
-  source ${INSTALL_DIR}/auth.env    
+  source ${INSTALL_DIR}/auth.env
 elif [[ -e ${INSTALL_DIR}/auth.env ]]
 then
-  source ${INSTALL_DIR}/auth.env  
+  source ${INSTALL_DIR}/auth.env
 fi
 set +o allexport
 
@@ -62,13 +74,13 @@ set +o allexport
 rm -f ${TMP_TAR_FILE}
 
 
-function usage { 
+function usage {
 	echo "Usage: shock-push-thumbnails.sh [-h <help>] [-d] -r <run folder> "
     echo " -d  delete files after upload"
  }
 
  # get options
- while getopts hdr: option; 
+ while getopts hdr: option;
  	do
   		 case "${option}"	in
  		h) HELP=1;;
@@ -80,7 +92,7 @@ function usage {
      esac
  done
 
-# 
+#
 if [ ! -d ${RUN_FOLDER} ]
 then
 	echo "$0 ${RUN_FOLDER} not found"
@@ -93,9 +105,9 @@ if [ ! -e ${RUN_FOLDER}/RTAComplete.txt ]
 then
 	echo "$0 ${RUN_FOLDER} is incomplete, RTAComplete.txt is not present. Aborting"
 	exit 1
-fi	 
+fi
 
-# strip the prefix of the run folder to get the name 
+# strip the prefix of the run folder to get the name
 RUN_FOLDER_NAME=`basename ${RUN_FOLDER}`
 
 # terminate on error
@@ -107,7 +119,7 @@ cd ${RUN_FOLDER}
 res=`tar cfz ${TMP_TAR_FILE} Thumbnail_Images/`
 
 if [ ! $? -eq 0 ]
-then 
+then
   echo "$0 Could not create Thumbnail tar file " >&2
   exit 1
 fi
@@ -122,7 +134,7 @@ JSON="{ \"type\" : \"run-folder-archive-thumbnails\",\
 # obtain a node ID ( "-1" if file already exits in SHOCK)
 NODE_ID=$(secure_shock_write "${JSON}" "${TMP_TAR_FILE}" "${RUN_FOLDER_NAME}-thumbnails.tar.gz")
 
-# check if the 
+# check if the
 if [ "${NODE_ID}" == "-1" ]
 then
 # set expiration date for RAW files
@@ -139,7 +151,3 @@ then
 	sleep 5
 	rm -rf ${RUN_FOLDER}/Thumbnail_images
 fi
-
-
-
-

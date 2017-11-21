@@ -6,7 +6,7 @@
 
 
 
-# 
+#
 # SHOCK_functions.sh reusable SHELL functions for SHOCK interaction
 #
 
@@ -15,6 +15,11 @@ set -e
 
 # securely write filename to SHOCK using the JSON information
 # note that the env variable AUTH will provide the authentication
+set -o allexport
+#-source ../auth.env
+source /usr/local/share/anl-seq-service/auth.env
+set +o allexport
+
 function secure_shock_write {
 	local INPUT_JSON=$1
 	local FILENAME=$2
