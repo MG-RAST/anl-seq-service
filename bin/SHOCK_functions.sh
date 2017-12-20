@@ -69,8 +69,9 @@ fi
 	else
 		# the file does not exist in SHOCK, we continue processing
 
-		#
-		local JSON=$(curl --progress-bar -X POST -H "${AUTH}" -F "attributes_str=${INPUT_JSON}" -F "file_name=${BASE_FILENAME}" -F "gzip=@${FILENAME}" ${SHOCK_SERVER}/node)
+		# quotes, and then escaped quotes around the filenames are curl-peculiar syntax to prevent curl from choking
+		# on filenames with commas and semicolons in them.
+		local JSON=$(curl --progress-bar -X POST -H "${AUTH}" -F "attributes_str=\"${INPUT_JSON}\"" -F "file_name=\"${BASE_FILENAME}\"" -F "gzip=@\"${FILENAME}\"" ${SHOCK_SERVER}/node)
 		# parse the return JSON to find error
 		local ERROR_STATUS=$(echo ${JSON} | jq -r  '{ error: .error }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ "  )
 		# grab nodeid from JSON return
@@ -78,7 +79,7 @@ fi
 		local NODE_ID=$(echo ${JSON} | jq -r ' { nid: .data.id }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " )
 
 		# if there is no return JSON and or we see an error status we report and die
-    if [  ${NODE_ID} == "" ]
+    if [  "${NODE_ID}" == "" ]
 			then
 				echo "can't get a node id (${FILENAME})" >&2
 				exit 1
@@ -95,14 +96,14 @@ fi
 		local NODE_ATTRIBUTES=`curl -s -X GET  -H "${AUTH}" "http://shock.metagenomics.anl.gov/node/${NODE_ID}" `
 		local SHOCK_MD5=`echo ${NODE_ATTRIBUTES} | jq -r '{ md5: .data.file.checksum.md5 }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " `
 
-		if [[ ${SHOCK_MD5} == "" ]] # this needs to check for the correct shock response (status 200?)
+		if [[ "${SHOCK_MD5}" == "" ]] # this needs to check for the correct shock response (status 200?)
 		then
 			echo "$0 could not obtain md5 sum for SHOCK node ${nodeid}"
 			exit 1
 		fi
 
 
-		if [[ ${FILE_MD5} != ${SHOCK_MD5} ]]
+		if [[ "${FILE_MD5}" != "${SHOCK_MD5}" ]]
 				then
 					echo "$0 MD5 checksum mismatch for ${FILENAME}, aborting (local-md5:(${FILE_MD5}), remote-md5:(${SHOCK_MD5})"
 					# remove uploaded file
