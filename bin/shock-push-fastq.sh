@@ -16,6 +16,9 @@ SHOCK_SERVER="http://shock.metagenomics.anl.gov"
 TMP_TAR_FILE="/var/tmp/temporary-tar-file-shock-client.$$.tar.gz"
 rm -f ${TMP_TAR_FILE} # ensure we are not re-using an old tar file
 
+# ensure that main shell quits if the subshell sends an error
+trap "echo $0 ERROR exiting ; exit 1" 1
+
 # make sure all files are deleted if we exit prematurely or die
 function clean_up {
 
@@ -118,7 +121,7 @@ RUN_FOLDER_NAME=`basename ${RUN_FOLDER}`
 
 # fastq files
 cd ${RUN_FOLDER}
-FASTQ_FILES=($(find ./ -name \*.fastq\*))
+FASTQ_FILES=`find ./ -name \*.fastq\*`
 
 # we might want to check if some files are already uploaded (in case fastq files were regenerated)
 # might take an extra script or an option to replace fastq files for a run-folder
