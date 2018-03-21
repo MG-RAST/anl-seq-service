@@ -196,6 +196,9 @@ JSON="{\
 }"
 
 REAL_FILE_NAME="${RUN_FOLDER_NAME}.sav.tar.gz"
+# rename TMP_TAR_FILE and change variable
+mv ${TMP_TAR_FILE} /var/tmp/${REAL_FILE_NAME}
+TMP_TAR_FILE=/var/tmp/${REAL_FILE_NAME}
 
 echo "uploading SAV-TAR-Archive .. "
 NODE_ID=$(secure_shock_write "${JSON}" "${TMP_TAR_FILE}" "${REAL_FILE_NAME}" )
