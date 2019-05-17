@@ -55,9 +55,8 @@ if [ "${REAL_FILENAME}_x" != "_x" ]
 then
 	local BASE_FILENAME="${REAL_FILENAME}"
 else
-	local BASE_FILENAME=$(basename "${FILENAME}")
+	local BASE_FILENAME=$(basename "${FILENAME}" .gz)
 fi
-
 
 	# check if file already exists
 	local	RETURN_JSON=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node?querynode&file.name=${BASE_FILENAME}&file.checksum.md5=${FILE_MD5}")
