@@ -55,15 +55,24 @@ if [ "${REAL_FILENAME}_x" != "_x" ]
 then
 	local BASE_FILENAME="${REAL_FILENAME}"
 else
-	local BASE_FILENAME=$(basename "${FILENAME}" .gz)
+	local BASE_FILENAME=$(basename "${FILENAME}")
+	local BASE_FILENAME_NO_SUFFIX=$(basename "${FILENAME}" .gz)
 fi
 
 	# check if file already exists
 	local	RETURN_JSON=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node?querynode&file.name=${BASE_FILENAME}&file.checksum.md5=${FILE_MD5}")
 	local LCOUNT=$(echo "${RETURN_JSON}" | jq -r  '{ total_count: .total_count }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " )
+
+	# might be duplicate names
+	local	RETURN_JSON=$(curl --silent -X GET -H "${AUTH}" "${SHOCK_SERVER}/node?querynode&file.name=${BASE_FILENAME_NO_SUFFIX}&file.checksum.md5=${FILE_MD5}")
+	local SCOUNT=$(echo "${RETURN_JSON}" | jq -r  '{ total_count: .total_count }' |  IFS='}' cut -d: -f2 | tr -d "}{\n\"\ " )
+	
 	if [ ! $LCOUNT -eq 0 ]
 	then
 		#echo "$0 function secure_shock_write:: the file ${FILENAME} is already present in SHOCK, not uploading it"
+		echo 1
+	elif [ ! $SCOUNT -eq 0 ]
+	then
 		echo 1
 	else
 		# the file does not exist in SHOCK, we continue processing
