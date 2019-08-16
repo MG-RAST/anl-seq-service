@@ -33,6 +33,6 @@ ADD bin/* /usr/local/bin/
 ADD share/* /usr/local/share/
 
 # install CWL runner
-RUN pip install --upgrade pip && \
-     pip install cwlref-runner
+RUN pip install --upgrade pip
+RUN pip install cwlref-runner
 
