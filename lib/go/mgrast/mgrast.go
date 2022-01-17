@@ -58,7 +58,7 @@ func Upload(project_id string, project string, file string, user string, client 
 			var attr struct {
 				Node_type  string   `json:"type"`
 				User_id    string   `json:"id"`
-				User_login string   `json:"name"`
+				User_login string   `json:"user"`
 				User_email string   `json:"email"`
 				Origin     string   `json:"origin"`
 				Tag        []string `json:"tag"`
