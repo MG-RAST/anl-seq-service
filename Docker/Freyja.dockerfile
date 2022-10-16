@@ -10,7 +10,7 @@ RUN apt-get install -y \
     autotools-dev
 
 # Pandas + numpy
-RUN pip install pandas numpy cvxpy matplotlib joblib tqdm plotly
+RUN pip install pandas numpy cvxpy matplotlib joblib tqdm plotly pyyaml requests
 
 WORKDIR /usr/src/Build
 RUN git clone https://github.com/andersen-lab/Freyja.git ;\
@@ -62,7 +62,7 @@ RUN ./autogen.sh ;\
 
 # Fryja
 WORKDIR /usr/src/Build/Freyja
-RUN pip install pyyaml requests
+# RUN pip install pyyaml requests
 RUN make install 
 RUN FREYJA_VERSION=`freyja --version`
 RUN freyja update
