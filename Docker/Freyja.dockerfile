@@ -1,14 +1,16 @@
-FROM python:3
+FROM python:3.7
 
 RUN apt-get update
 RUN apt-get install -y \
     less \
     cmake \
     samtools \
+    vim \
+    emacs \
     autotools-dev
 
 # Pandas + numpy
-RUN pip install pandas numpy cvxpy matplotlib
+RUN pip install pandas numpy cvxpy matplotlib joblib tqdm plotly
 
 WORKDIR /usr/src/Build
 RUN git clone https://github.com/andersen-lab/Freyja.git ;\
@@ -60,5 +62,7 @@ RUN ./autogen.sh ;\
 
 # Fryja
 WORKDIR /usr/src/Build/Freyja
+RUN pip install pyyaml requests
 RUN make install 
+RUN FREYJA_VERSION=`freyja --version`
 RUN freyja update
