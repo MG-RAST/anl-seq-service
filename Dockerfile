@@ -1,11 +1,11 @@
 # Docker file for the Argonne Sequencing service
 
 FROM	ubuntu
-MAINTAINER folker@anl.gov
+LABEL MAINTAINER="wilke@anl.gov"
 
 RUN apt-get update -y
 RUN apt-get update -y --fix-missing
-RUN  apt-get install -y \
+RUN apt install -y \
    alien \
    bowtie2 \
    build-essential\
@@ -13,9 +13,10 @@ RUN  apt-get install -y \
    dh-autoreconf \
    idba \
    jove \
-   python \
-   python-setuptools\
-   python-pip\
+   jq \
+   python3\
+   python3-setuptools \
+   python3-pip\
    unzip \
    wget 
   
@@ -25,14 +26,14 @@ RUN  apt-get install -y \
 # http://support.illumina.com/content/dam/illumina-support/documents/downloads/software/bcl2fastq/bcl2fastq2-v2-18-0-12-linux-x86-64.zip
 ADD https://support.illumina.com/content/dam/illumina-support/documents/downloads/software/bcl2fastq/bcl2fastq2-v2-19-1-linux.zip /root/bcl2fastq2.zip
 RUN  (cd /root ; unzip /root/bcl2fastq2*.zip )
-RUN alien -i /root/bcl2fastq2-*.rpm
+# RUN alien -i /root/bcl2fastq2-*.rpm
 
 
-# copy local files to /usr/local/ (binaries and adapter files)
-ADD bin/* /usr/local/bin/
-ADD share/* /usr/local/share/
+# # copy local files to /usr/local/ (binaries and adapter files)
+# ADD bin/* /usr/local/bin/
+# ADD share/* /usr/local/share/
 
 # install CWL runner
-RUN pip install --upgrade pip && \
-     pip install cwlref-runner
+RUN pip3 install --upgrade pip && \
+     pip3 install cwlref-runner
 
