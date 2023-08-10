@@ -30,7 +30,8 @@ USER root
 RUN apt-get update && apt-get install -yq --no-install-recommends \
     git wget \
     ca-certificates \
-    sudo python3
+    sudo \
+    python3
 # WORKDIR /usr/src/Build/kentsource
 # RUN wget http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/faSomeRecords ;\
 #     wget http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/faSize ;\
