@@ -1,0 +1,6 @@
+sample_name	library_ID	title	library_strategy	library_source	library_selection	library_layout	platform	instrument_model	design_description	filetype	filename	filename2	filename3	filename4	assembly	fasta_file	enrichment_kit	amplicon_PCR_primer_scheme	library_preparation_kit	amplicon_size	quality_control_method	quality_control_method_version	quality_control_determination	quality_control_issues	quality_control_details	dehosting_method	sequence_submitter_contact_email	raw_sequence_data_processing_method 
+Sample ID	fastq ID	Targeted Amplification sequencing of wastewater sample	AMPLICON	VIRAL RNA	PCR	paired	ILLUMINA	NextSeq 2000	Viral RNA is converted into cDNA and made into libraries with QIAseq DIRECT SARS-CoV-2 Kits	fastq	Andreas Ask	Andreas Ask					QIAseq DIRECT SARS-CoV-2	QIAseq DIRECT SARS-CoV-2 - Boosted	QIAseq DIRECT Unique Dual Index prep	250bp						SRA human read removal tool		no further processing
+																												
+																												
+								Changes when Hsieq or Miseq used									Cahnges  for swift											
+																	Changes when start uesing booster											

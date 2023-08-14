@@ -1,0 +1,16 @@
+# This is a submission template for batch deposit of 'SARS-CoV-2: wastewater surveillance; version 1.0' samples to the NCBI BioSample database (https://www.ncbi.nlm.nih.gov/biosample/).																															
+"# Fields with an asterisk (*) are mandatory. Your submission will fail if any mandatory fields are not completed. If information is unavailable for any mandatory field, please enter 'not collected', 'not applicable' or 'missing' as appropriate."																															
+# All other fields are optional. Leave optional fields empty if no information is available.																															
+"# You can add any number of custom fields to fully describe your BioSamples, simply include them in the table."																															
+"# CAUTION: Be aware that Excel may automatically apply formatting to your data. In particular, take care with dates, incrementing autofills and special characters like / or -. Doublecheck that your text file is accurate before uploading to BioSample."																															
+# TO MAKE A SUBMISSION:																															
+"#     1. Complete the template table (typically in Excel, or another spreadsheet application)"																															
+"#     2. Save the worksheet as a Text (Tab-delimited) file - use 'File, Save as, Save as type: Text (Tab-delimited)'"																															
+#     3. Upload the file on the 'Attributes' tab of the BioSample Submission Portal at https://submit.ncbi.nlm.nih.gov/subs/biosample/.																															
+"#     4. If you have any questions, please contact us at biosamplehelp@ncbi.nlm.nih.gov."																															
+																															
+*sample_name	sample_title	bioproject_accession	*organism	*collection_date	collection_time	*geo_loc_name	*isolation_source	collection_site_id	project_name	collected_by	purpose_of_ww_sampling	ww_sample_site	ww_flow	instantaneous_flow	*ww_population	ww_surv_jurisdiction	*ww_sample_matrix	*ww_sample_type	*ww_sample_duration	ww_surv_system_sample_id	concentration_method	extraction_method	extraction_control	ww_endog_control_1	*ww_surv_target_1	*ww_surv_target_1_known_present	ww_surv_target_1_protocol	ww_surv_target_1_conc	ww_surv_target_1_conc_unit	ww_surv_target_1_gene	sequenced_by
+Sample ID 	SARS-CoV-2: wastewater surveillance sample from wastewater metagenome	PRJNA989260	wastewater metagenome	sample_collect_date	sample_collect_time	USA: Illinois	Wastewater	From TSV	CDC NWSS	Cheat Sheet	public health surveillance community-level	wastewater treatment plant 			Cheat Sheet	IL	raw wastewater	sample_type	sample_type	Sample ID	ceres nanotrap	thermo magmax microbiome ultra nucleic acid isolation kit	bcov vaccine		sars-cov-2	yes	"Lu et al. us cdc real-time reverse transcription pcr panel for detection of severe acutre respirtaory syndrome coronavirus 2- volume 26, number 8 - august 2020 - emerging infectious diseases journal - cdc"	pcr_target_avg_conc	copies/L wastewater	N gene (N1)	Argonne National Laboratory
+																															
+																		need to pull the single word composite or grab	needs to pull number from field												
+																		e.x. 24-hr time-weighted composite													
