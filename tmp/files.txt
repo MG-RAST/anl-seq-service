@@ -1,0 +1,33 @@
+230712.sample-mapping.tsv   43401_S17_R1_001.fastq.gz  53392_S57_R2_001.fastq.gz  54708_S21_R1_001.fastq.gz   58934_S39_R2_001.fastq.gz   60553_S7_R1_001.fastq.gz    62602_S83_R2_001.fastq.gz
+43090_S97_R1_001.fastq.gz   43401_S17_R2_001.fastq.gz  53393_S13_R1_001.fastq.gz  54708_S21_R2_001.fastq.gz   59061_S109_R1_001.fastq.gz  60553_S7_R2_001.fastq.gz    62612_S107_R1_001.fastq.gz
+43090_S97_R2_001.fastq.gz   43405_S74_R1_001.fastq.gz  53393_S13_R2_001.fastq.gz  54898_S87_R1_001.fastq.gz   59061_S109_R2_001.fastq.gz  60592_S4_R1_001.fastq.gz    62612_S107_R2_001.fastq.gz
+43091_S18_R1_001.fastq.gz   43405_S74_R2_001.fastq.gz  53397_S50_R1_001.fastq.gz  54898_S87_R2_001.fastq.gz   59797_S98_R1_001.fastq.gz   60592_S4_R2_001.fastq.gz    62648_S11_R1_001.fastq.gz
+43091_S18_R2_001.fastq.gz   43416_S73_R1_001.fastq.gz  53397_S50_R2_001.fastq.gz  54926_S91_R1_001.fastq.gz   59797_S98_R2_001.fastq.gz   60613_S76_R1_001.fastq.gz   62648_S11_R2_001.fastq.gz
+43138_S82_R1_001.fastq.gz   43416_S73_R2_001.fastq.gz  53403_S26_R1_001.fastq.gz  54926_S91_R2_001.fastq.gz   59801_S52_R1_001.fastq.gz   60613_S76_R2_001.fastq.gz   64419_S100_R1_001.fastq.gz
+43138_S82_R2_001.fastq.gz   43989_S3_R1_001.fastq.gz   53403_S26_R2_001.fastq.gz  58123_S106_R1_001.fastq.gz  59801_S52_R2_001.fastq.gz   60618_S59_R1_001.fastq.gz   64419_S100_R2_001.fastq.gz
+43175_S89_R1_001.fastq.gz   43989_S3_R2_001.fastq.gz   53404_S29_R1_001.fastq.gz  58123_S106_R2_001.fastq.gz  59811_S77_R1_001.fastq.gz   60618_S59_R2_001.fastq.gz   64928_S101_R1_001.fastq.gz
+43175_S89_R2_001.fastq.gz   44027_S1_R1_001.fastq.gz   53404_S29_R2_001.fastq.gz  58612_S14_R1_001.fastq.gz   59811_S77_R2_001.fastq.gz   60620_S84_R1_001.fastq.gz   64928_S101_R2_001.fastq.gz
+43180_S53_R1_001.fastq.gz   44027_S1_R2_001.fastq.gz   53415_S30_R1_001.fastq.gz  58612_S14_R2_001.fastq.gz   59820_S88_R1_001.fastq.gz   60620_S84_R2_001.fastq.gz   64973_S93_R1_001.fastq.gz
+43180_S53_R2_001.fastq.gz   44028_S23_R1_001.fastq.gz  53415_S30_R2_001.fastq.gz  58620_S79_R1_001.fastq.gz   59820_S88_R2_001.fastq.gz   60633_S62_R1_001.fastq.gz   64973_S93_R2_001.fastq.gz
+43230_S75_R1_001.fastq.gz   44028_S23_R2_001.fastq.gz  53425_S46_R1_001.fastq.gz  58620_S79_R2_001.fastq.gz   59827_S108_R1_001.fastq.gz  60633_S62_R2_001.fastq.gz   BL1_S95_R1_001.fastq.gz
+43230_S75_R2_001.fastq.gz   44031_S54_R1_001.fastq.gz  53425_S46_R2_001.fastq.gz  58716_S56_R1_001.fastq.gz   59827_S108_R2_001.fastq.gz  60635_S65_R1_001.fastq.gz   BL1_S95_R2_001.fastq.gz
+43313_S81_R1_001.fastq.gz   44031_S54_R2_001.fastq.gz  53427_S47_R1_001.fastq.gz  58716_S56_R2_001.fastq.gz   59834_S8_R1_001.fastq.gz    60635_S65_R2_001.fastq.gz   BL2_S96_R1_001.fastq.gz
+43313_S81_R2_001.fastq.gz   53268_S69_R1_001.fastq.gz  53427_S47_R2_001.fastq.gz  58732_S67_R1_001.fastq.gz   59834_S8_R2_001.fastq.gz    61298_S61_R1_001.fastq.gz   BL2_S96_R2_001.fastq.gz
+43317_S45_R1_001.fastq.gz   53268_S69_R2_001.fastq.gz  53428_S32_R1_001.fastq.gz  58732_S67_R2_001.fastq.gz   59841_S6_R1_001.fastq.gz    61298_S61_R2_001.fastq.gz   BL3_S103_R1_001.fastq.gz
+43317_S45_R2_001.fastq.gz   53275_S22_R1_001.fastq.gz  53428_S32_R2_001.fastq.gz  58792_S58_R1_001.fastq.gz   59841_S6_R2_001.fastq.gz    61304_S51_R1_001.fastq.gz   BL3_S103_R2_001.fastq.gz
+43328_S24_R1_001.fastq.gz   53275_S22_R2_001.fastq.gz  53429_S28_R1_001.fastq.gz  58792_S58_R2_001.fastq.gz   59845_S78_R1_001.fastq.gz   61304_S51_R2_001.fastq.gz   BL4_S104_R1_001.fastq.gz
+43328_S24_R2_001.fastq.gz   53354_S31_R1_001.fastq.gz  53429_S28_R2_001.fastq.gz  58794_S64_R1_001.fastq.gz   59845_S78_R2_001.fastq.gz   61323_S80_R1_001.fastq.gz   BL4_S104_R2_001.fastq.gz
+43331_S105_R1_001.fastq.gz  53354_S31_R2_001.fastq.gz  53430_S44_R1_001.fastq.gz  58794_S64_R2_001.fastq.gz   59868_S15_R1_001.fastq.gz   61323_S80_R2_001.fastq.gz   BL5_S111_R1_001.fastq.gz
+43331_S105_R2_001.fastq.gz  53359_S19_R1_001.fastq.gz  53430_S44_R2_001.fastq.gz  58796_S70_R1_001.fastq.gz   59868_S15_R2_001.fastq.gz   61343_S72_R1_001.fastq.gz   BL5_S111_R2_001.fastq.gz
+43332_S90_R1_001.fastq.gz   53359_S19_R2_001.fastq.gz  53432_S37_R1_001.fastq.gz  58796_S70_R2_001.fastq.gz   59879_S12_R1_001.fastq.gz   61343_S72_R2_001.fastq.gz   BL6_S112_R1_001.fastq.gz
+43332_S90_R2_001.fastq.gz   53362_S34_R1_001.fastq.gz  53432_S37_R2_001.fastq.gz  58853_S36_R1_001.fastq.gz   59879_S12_R2_001.fastq.gz   61360_S5_R1_001.fastq.gz    BL6_S112_R2_001.fastq.gz
+43354_S49_R1_001.fastq.gz   53362_S34_R2_001.fastq.gz  53433_S35_R1_001.fastq.gz  58853_S36_R2_001.fastq.gz   60288_S92_R1_001.fastq.gz   61360_S5_R2_001.fastq.gz    SRA
+43354_S49_R2_001.fastq.gz   53364_S27_R1_001.fastq.gz  53433_S35_R2_001.fastq.gz  58861_S38_R1_001.fastq.gz   60288_S92_R2_001.fastq.gz   62502_S99_R1_001.fastq.gz   TW1_S94_R1_001.fastq.gz
+43357_S41_R1_001.fastq.gz   53364_S27_R2_001.fastq.gz  53434_S42_R1_001.fastq.gz  58861_S38_R2_001.fastq.gz   60304_S66_R1_001.fastq.gz   62502_S99_R2_001.fastq.gz   TW1_S94_R2_001.fastq.gz
+43357_S41_R2_001.fastq.gz   53377_S20_R1_001.fastq.gz  53434_S42_R2_001.fastq.gz  58862_S25_R1_001.fastq.gz   60304_S66_R2_001.fastq.gz   62534_S68_R1_001.fastq.gz   TW2_S110_R1_001.fastq.gz
+43369_S9_R1_001.fastq.gz    53377_S20_R2_001.fastq.gz  53436_S33_R1_001.fastq.gz  58862_S25_R2_001.fastq.gz   60318_S85_R1_001.fastq.gz   62534_S68_R2_001.fastq.gz   TW2_S110_R2_001.fastq.gz
+43369_S9_R2_001.fastq.gz    53378_S43_R1_001.fastq.gz  53436_S33_R2_001.fastq.gz  58873_S40_R1_001.fastq.gz   60318_S85_R2_001.fastq.gz   62562_S86_R1_001.fastq.gz
+43379_S2_R1_001.fastq.gz    53378_S43_R2_001.fastq.gz  54542_S55_R1_001.fastq.gz  58873_S40_R2_001.fastq.gz   60331_S60_R1_001.fastq.gz   62562_S86_R2_001.fastq.gz
+43379_S2_R2_001.fastq.gz    53388_S48_R1_001.fastq.gz  54542_S55_R2_001.fastq.gz  58919_S63_R1_001.fastq.gz   60331_S60_R2_001.fastq.gz   62587_S102_R1_001.fastq.gz
+43387_S10_R1_001.fastq.gz   53388_S48_R2_001.fastq.gz  54569_S71_R1_001.fastq.gz  58919_S63_R2_001.fastq.gz   60338_S16_R1_001.fastq.gz   62587_S102_R2_001.fastq.gz
+43387_S10_R2_001.fastq.gz   53392_S57_R1_001.fastq.gz  54569_S71_R2_001.fastq.gz  58934_S39_R1_001.fastq.gz   60338_S16_R2_001.fastq.gz   62602_S83_R1_001.fastq.gz
