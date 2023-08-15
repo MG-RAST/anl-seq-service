@@ -18,51 +18,193 @@ def init( options : None) :
         cfg = options
     return cfg
 
+def read_biosample_template(biosample_template=None) :
+    """Read biosample template file"""
+
+    logger.info("Reading biosample template " + str(biosample_template))
+
+    mapping = None
+    data = None
+    const = {}
+    
+    # find header and first row
+    found_header_row = False
+    first_row        = False
+    
+    # store header information
+    header = None
+    data   = []
+    constants = {}
+
+    if biosample_template and os.path.isfile(biosample_template) :
+        with open(biosample_template) as f :
+            for line in f:
+                parts = line.rstrip().split("\t")
+
+                if not found_header_row :
+                    if re.search("sample_name", parts[0]) :
+                        header = parts
+                        found_header_row = True
+                        first_row = True
+                elif first_row :
+
+                    data.append(parts)
+                else :
+                    data.append(parts)
+                line = f.readline()
+                print(line)
+                logger.debug("Searching sample_name, skipping line.")
+                found_header_row = True
+
 
 def read_sequence_dir(dir) :
     """Read sequence dir, collect all fastq files"""
 
-    samples = []
+    logger.debug("Creating list of fastq files from " + str(dir))
+    fastq_files = []
 
     if dir and os.path.isdir(dir):
-        print(glob.glob(dir + "/*.fastq"))
+        # print(glob.glob(dir + "/*.fastq*"))
+        for fastq in glob.glob(dir + "/*.fastq*") :
+            fastq_files.append( os.path.basename(fastq))
     else:
         logger.error("Missing directory " + str(dir))
+    logger.info("Found " + str(len(fastq_files)) + " files.")
+    return fastq_files
+
+def fastqs_to_samples(list_of_fastqs) :
+    """Takes a list of fastq files and extract sample ID. Return dictionary sample to files."""
+    logger.debug("Creating sample list.")
+    samples = {}
+
+    for f in list_of_fastqs :
+        parts = f.split("_")
+        # print(parts)
+        ID = parts[0]
+
+        # Initialize sample dict and key and value variables for dictionary
+        sample = {
+            "file" : None ,
+            "R1" : None ,
+            "R2" : None 
+            }
+
+        k = "file"
+        v = None
+
+        if "R1" in parts or "R2" in parts:
+            logger.debug("Found R1 or R2 in %s.", f)
+            k = parts[2]
+            v = f
+       
+        if not ID in samples :
+            samples[ID] = sample
     
+        samples[ID][k]=v
+
+    logger.info("Found %s samples" , len(samples.keys()))
     return samples
 
-def make_run_file(header=None, data=None, mapping=None, samples=None) :
+def make_run_file(header=None, data=None, constants=None, mapping=None, samples=None, output=None) :
+    logger.debug("Creating run file.")
 
-    print("\t".join(header))
+    # assuming sample_name column is index 0
+    sample_idx  = 0
+    files_idx   = []
+
+    for i,v in enumerate(header) :
+        if re.search("filename", v) :
+            files_idx.append(i)
+            logger.debug("Found file column %s : %s", v , str(i))
+ 
+        
+    logger.debug("File columns: " + str(files_idx))
+
+    # Print file
+    fh = None
+    if output :
+        fh = open(output, "w")
+    # Header
+    if fh :
+        fh.write("\t".join(header) + "\n")
+    else:
+        print("\t".join(header))
+
     for row in data:
-        print("\t".join(row))
 
-def read_run_template(run_template=None):
-    """Read run template file"""
+        # ensure row has same length than header
+        while len(row) < len(header) :
+            row.append('')
 
-    logger.info("Reading run template " + str(run_template))
+        id = row[sample_idx]
+        idx = 0
+
+        # add sequence files
+        if id in samples :
+     
+            if samples[id]['file'] :
+                row[files_idx[idx]] = samples[id]['file']
+                idx += 1
+            if samples[id]['R1'] :
+                row[files_idx[idx]] = samples[id]['R1'] 
+                idx += 1
+            if samples[id]['R2'] :
+                row[files_idx[idx]] = samples[id]['R2'] 
+                idx += 1
+        else:
+            logger.error("Can't find %s in file list.", id)
+
+        # fill in constants
+        for i,v in enumerate(row) :
+            if not v :
+                if header[i] in constants and constants[header[i]] is not None :
+                    row[i] = constants[header[i]]
+                else :
+                    row[i] = ''
+
+        if fh :
+            fh.write("\t".join(row) + "\n")
+        else:
+            print("\t".join(row))
+
+def read_template(template=None):
+    """Read template file; first column sample_name"""
+
+    logger.info("Reading template " + str(template))
 
     mapping = None
     data = None
+    const = {}
 
-    if run_template and os.path.isfile(run_template) :
-        with open(run_template) as f :
+    if template and os.path.isfile(template) :
+        with open(template) as f :
 
             found_header_row = False
+            first_row        = False
             # store header information
             header = None
             data   = []
+            constants = {}
             
             # read until header row - remember headers and position , read data 
             for line in f :
                 # print(line)
-                columns = line.rstrip().split("\t")
+                tmp     = line.rstrip().split("\t")
+                columns = list(map( lambda x : x.lstrip("*") , tmp ))
 
                 if not found_header_row :
-                    if re.search(columns[0], "sample_name") :
+                    if re.search("sample_name", columns[0] ) :
                         header = columns
                         found_header_row = True
+                        first_row = True
                         logger.info("Header with " + str(len(header)) + " columns")
+                elif first_row :
+                    # get values from first row for template
+                    for i,k in enumerate(header) :
+                        # print(i,k)
+                        constants[k] = columns[i]
+                    first_row = False
+                    data.append(columns)
                 else :
                     data.append(columns)
 
@@ -72,15 +214,71 @@ def read_run_template(run_template=None):
     else:
         logger.error("No file " + str(run_template))
 
-    return (header , data)
+    return (header , data, constants)
 
+
+def read_run_template(run_template=None):
+    """Read run template file"""
+
+    logger.info("Reading run template " + str(run_template))
+
+    mapping = None
+    data = None
+    const = {}
+
+    if run_template and os.path.isfile(run_template) :
+        with open(run_template) as f :
+
+            found_header_row = False
+            first_row        = False
+            # store header information
+            header = None
+            data   = []
+            constants = {}
+            
+            # read until header row - remember headers and position , read data 
+            for line in f :
+                # print(line)
+                columns = line.rstrip().split("\t")
+
+            
+
+                if not found_header_row :
+                    if re.search("sample_name", columns[0] ) :
+                        header = columns
+                        found_header_row = True
+                        first_row = True
+                        logger.info("Header with " + str(len(header)) + " columns")
+                elif first_row :
+                    # get values from first row for template
+                    for i,k in enumerate(header) :
+                        print(i,k)
+                        constants[k] = columns[i]
+                    first_row = False
+                    data.append(columns)
+                else :
+                    data.append(columns)
+
+            if not found_header_row :
+                logger.error("Can not find row with sample_name")
+
+    else:
+        logger.error("No file " + str(run_template))
+
+    return (header , data, constants)
 
 def command_line_options():
     """Define and parse command line options"""
     parser = argparse.ArgumentParser(description='Command line options for creating SRA metadata file from template')
   
-    parser.add_argument('--template', dest='template', 
+    parser.add_argument('--run-template', dest='run_template', 
                     help='template file for a given run')
+    parser.add_argument('--run-output', dest='run_output', default=None, 
+                    help='run file, created from --run-template and --sequence-dir')
+    parser.add_argument('--biosample-template', dest='biosample_template', 
+                    help='biosample template file for a given run')
+    parser.add_argument('--biosample-output', dest='biosample_output', default=None, 
+                    help='biosample file, created from --biosample-template and --sequence-dir')
     parser.add_argument('--mapping', dest='mapping', 
                     help='mapping file for constants in specified columns')
     parser.add_argument('--sequence-dir', dest='dir', default=None ,
@@ -94,10 +292,16 @@ def command_line_options():
 def main(args) :
     # logger.debug("Debug")
     # logger.info("Info")
-    samples = read_sequence_dir(args.dir)
 
-    (header, data) = read_run_template(run_template=args.template)
-    make_run_file(header=header, data=data, samples=samples, mapping=None)
+    if args.run_template :
+        fastq = read_sequence_dir(args.dir)
+        samples = fastqs_to_samples(fastq)
+        (header, data, const) = read_template(template=args.run_template)
+        make_run_file(header=header, data=data, constants=const, samples=samples, mapping=None , output=args.run_output)
+
+    if args.biosample_template :
+        (header, data, const) = read_template(template=args.biosample_template)
+        make_biosample_file(header=header, data=data, constants=const,  mapping=None , output=args.biosample_output)
 
 
 if __name__ == '__main__' :
@@ -108,7 +312,7 @@ if __name__ == '__main__' :
 
     cfg = init( options=args)
     logger.debug(args)
-    logger.debug("Template:\t" + args.template)
+    logger.debug("Template:\t" + str(args.run_template))
 
     # logger.setLevel("INFO")
     main(args)
