@@ -56,6 +56,31 @@ def read_biosample_template(biosample_template=None) :
                 logger.debug("Searching sample_name, skipping line.")
                 found_header_row = True
 
+def read_site_ID(file) :
+    logger.debug("Reading SiteID file.")
+
+    sites = None
+
+    if file and os.path.isfile(file) :
+        sites = {}
+        header = {}
+        with open(file) as f:
+
+            l = f.readline().rstrip() 
+            h = map( lambda x : x.lstrip("*") , l.split("\t"))
+            for i,v in enumerate(h):
+                header[i] = v
+
+            for line in f:
+                parts = line.rstrip().split("\t")
+                sites[parts[0]] = { 
+                                    header[1]   : parts[1] ,
+                                    header[2]   : parts[2]
+                                   }
+    else:
+        logger.error("No SiteID file:\t" + str(file))
+
+    return sites
 
 def read_sequence_dir(dir) :
     """Read sequence dir, collect all fastq files"""
@@ -104,6 +129,64 @@ def fastqs_to_samples(list_of_fastqs) :
 
     logger.info("Found %s samples" , len(samples.keys()))
     return samples
+
+def make_biosample_file(header=None, data=None, constants=None, mapping=None, samples=None, sites=None, output=None) :
+    logger.debug("Creating biosample file.")
+
+    # assuming sample_name column is index 0
+    sample_idx  = 0
+    idx   = []
+
+    map2 = {}
+
+    # find columns
+    for i,v in enumerate(header) :
+        if re.search("filename|collection_site_id|collected_by|ww_population", v) :
+            idx.append(i)
+            map2[v] = i
+            logger.debug("Found column %s : %s", v , str(i))
+ 
+        
+    logger.debug("Columns: " + str(idx))
+
+    # Print file
+    fh = None
+    if output :
+        fh = open(output, "w")
+    # Header
+    if fh :
+        fh.write("\t".join(header) + "\n")
+    else:
+        print("\t".join(header))
+
+    for row in data:
+
+        # ensure row has same length than header
+        while len(row) < len(header) :
+            row.append('')
+
+        id = row[sample_idx]
+        idx = 0
+
+ 
+
+        # fill in constants
+        for i,v in enumerate(row) :
+            if not v :
+                if header[i] in constants and constants[header[i]] is not None :
+                    row[i] = constants[header[i]]
+                else :
+                    row[i] = ''
+
+            # fill in collected_by and ww_population based on 
+            row[map2['collected_by']] = sites[row[map2["collection_site_id"]]]['collected_by']
+            row[map2['ww_population']] = sites[row[map2["collection_site_id"]]]['ww_population']
+
+        if fh :
+            fh.write("\t".join(row) + "\n")
+        else:
+            print("\t".join(row))
+
 
 def make_run_file(header=None, data=None, constants=None, mapping=None, samples=None, output=None) :
     logger.debug("Creating run file.")
@@ -279,6 +362,8 @@ def command_line_options():
                     help='biosample template file for a given run')
     parser.add_argument('--biosample-output', dest='biosample_output', default=None, 
                     help='biosample file, created from --biosample-template and --sequence-dir')
+    parser.add_argument('--sites', dest='sites', default=None, 
+                    help='sites mapping file, contains collected_by and ww_population')
     parser.add_argument('--mapping', dest='mapping', 
                     help='mapping file for constants in specified columns')
     parser.add_argument('--sequence-dir', dest='dir', default=None ,
@@ -300,8 +385,9 @@ def main(args) :
         make_run_file(header=header, data=data, constants=const, samples=samples, mapping=None , output=args.run_output)
 
     if args.biosample_template :
+        sites = read_site_ID(args.sites)
         (header, data, const) = read_template(template=args.biosample_template)
-        make_biosample_file(header=header, data=data, constants=const,  mapping=None , output=args.biosample_output)
+        make_biosample_file(header=header, data=data, constants=const,  mapping=None , output=args.biosample_output , sites=sites)
 
 
 if __name__ == '__main__' :
