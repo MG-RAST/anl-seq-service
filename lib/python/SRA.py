@@ -11,8 +11,10 @@ logging.basicConfig(format='%(levelname)s %(asctime)s\t%(message)s', level=loggi
 # create config
 def init( options : None) :
     """Create initial config"""
-    logger.setLevel(logging.DEBUG)
+    # logger.setLevel(logging.DEBUG)
     # logger.debug("Debugging")
+    logger.setLevel(options.level)
+    
     cfg = None
     if options :
         cfg = options
@@ -141,10 +143,12 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
 
     # find columns
     for i,v in enumerate(header) :
-        if re.search("filename|collection_site_id|collected_by|ww_population", v) :
+        if re.search("filename|sample_name|collection_date|collection_time|collection_site_id|collected_by|ww_population|ww_sample_type|ww_sample_duration|ww_surv_system_sample_id|ww_surv_target_1_conc", v) :
             idx.append(i)
             map2[v] = i
             logger.debug("Found column %s : %s", v , str(i))
+        else:
+            map2[v] = i
  
         
     logger.debug("Columns: " + str(idx))
@@ -177,10 +181,28 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
                     row[i] = constants[header[i]]
                 else :
                     row[i] = ''
+        
+        if not row[map2['ww_surv_system_sample_id']] :
+            row[map2['ww_surv_system_sample_id']] = row[map2['sample_name']]
+        else:
+            logger.debug("Found existing ww_surv_system_sample_id:\t" + row[map2['ww_surv_system_sample_id']] )
 
-            # fill in collected_by and ww_population based on 
+        if row[0] in mapping['samples'] :
+            # fill in collected_by and ww_population based on sites file
             row[map2['collected_by']] = sites[row[map2["collection_site_id"]]]['collected_by']
             row[map2['ww_population']] = sites[row[map2["collection_site_id"]]]['ww_population']
+
+            # metadata from NWSS samples file
+            row[map2['collection_date']] = mapping['samples'][row[0]]['sample_collect_date']
+            row[map2['collection_time']] = mapping['samples'][row[0]]['sample_collect_time']
+            row[map2['ww_surv_target_1_conc']] = mapping['samples'][row[0]]['pcr_target_avg_conc']
+
+            type = mapping['samples'][row[0]]['sample_type']
+            row[map2['ww_sample_type']] = type
+            row[map2['ww_sample_duration']] = type 
+        else:
+            logger.error("ID %s not in mapping, probably missing from %s." , row[0] , args.samples)
+
 
         if fh :
             fh.write("\t".join(row) + "\n")
@@ -299,6 +321,51 @@ def read_template(template=None):
 
     return (header , data, constants)
 
+def read_samples(file):
+    logger.debug("Reading sample metadata from " + str(file))
+
+    md = { 
+        'header': None ,
+        'data'  : None ,
+        'samples' : None
+    }
+
+    header = {}
+    i2h = []
+    data = []
+    samples = {}
+
+    with open(file) as f :
+        h = f.readline()
+        i2h = h.rstrip().split(",")
+        for i,v in enumerate( i2h ) :
+            header[v] = i
+            
+
+        md['header'] = header
+        l = 1
+        for line in f :
+            col = line.rstrip().split(",")
+            data.append( col )
+
+            samples[col[0]] = {}
+            for i,v in enumerate(i2h) :
+                samples[col[0]][ i2h[i] ] = col[i]
+            
+            # Cross check nr headers vs nr rows
+            if len(i2h) < len(col) :
+                error = True
+                msg = "Mismatch number of columns in header row versus number of columns in data rows"
+                logger.warning("Number of header columns does not match columns in row %i." , l)
+            l += 1
+
+    md['data'] = data
+    md['samples'] = samples
+    
+    if error :
+        logger.error(msg)
+
+    return md
 
 def read_run_template(run_template=None):
     """Read run template file"""
@@ -368,6 +435,10 @@ def command_line_options():
                     help='mapping file for constants in specified columns')
     parser.add_argument('--sequence-dir', dest='dir', default=None ,
                     help='directory containing sequences/samples to be included in the submission file')
+    parser.add_argument('--samples', dest='samples', default=None ,
+                    help='sample file, contains sample metadata; probably csv')
+    parser.add_argument('--log-level', dest='level', choices=["DEBUG", "INFO" , "WARNINGS" , "ERROR"], default="INFO" ,
+                    help='sample file, contains sample metadata; probably csv')
     
 
     args = parser.parse_args()
@@ -378,6 +449,12 @@ def main(args) :
     # logger.debug("Debug")
     # logger.info("Info")
 
+    logger.setLevel(args.level)
+
+
+    if args.samples :
+        metadata = read_samples(args.samples)
+
     if args.run_template :
         fastq = read_sequence_dir(args.dir)
         samples = fastqs_to_samples(fastq)
@@ -387,7 +464,7 @@ def main(args) :
     if args.biosample_template :
         sites = read_site_ID(args.sites)
         (header, data, const) = read_template(template=args.biosample_template)
-        make_biosample_file(header=header, data=data, constants=const,  mapping=None , output=args.biosample_output , sites=sites)
+        make_biosample_file(header=header, data=data, constants=const,  mapping=metadata , output=args.biosample_output , sites=sites)
 
 
 if __name__ == '__main__' :
