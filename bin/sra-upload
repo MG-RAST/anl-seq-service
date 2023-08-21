@@ -1,0 +1,159 @@
+#!/bin/bash
+
+# remove all available files for a given RUN_FOLDER_NAME
+
+# constants
+SHOCK_SERVER="http://shock.metagenomics.anl.gov"
+DEBUG=0
+
+
+function usage { 
+echo "list files available for RUN_FOLDER_NAME "
+echo "Usage: $0 [-h <help>] -r <run folder> -x"
+ }
+
+# get options
+while getopts hr:dx option; do
+    case "${option}"
+        in
+		h) 
+            HELP=1
+            ;;
+		r) RUN_FOLDER=${OPTARG};;
+        d) DEBUG=1;;
+		x) DELETE=1;;
+		*)
+		usage
+		;;
+    esac
+done
+
+
+
+#   -h, --help            show this help message and exit
+#   --run-template RUN_TEMPLATE
+#                         template file for a given run
+#   --run-output RUN_OUTPUT
+#                         run file, created from --run-template and --sequence-
+#                         dir
+#   --biosample-template BIOSAMPLE_TEMPLATE
+#                         biosample template file for a given run
+#   --biosample-output BIOSAMPLE_OUTPUT
+#                         biosample file, created from --biosample-template and
+#                         --sequence-dir
+#   --sites SITES         sites mapping file, contains collected_by and
+#                         ww_population
+#   --mapping MAPPING     mapping file for constants in specified columns
+#   --sequence-dir DIR    directory containing sequences/samples to be included
+#                         in the submission file
+#   --samples SAMPLES     sample file, contains sample metadata; probably csv
+#   --log-level {DEBUG,INFO,WARNINGS,ERROR}
+#                         sample file, contains sample metadata; probably csv
+
+# templetes and mapping file are in SRA subfolder of run folder
+
+
+# Check if absolute path - convert to absolute path
+if [ ! "${RUN_FOLDER:0:1}" = "/" ]
+then
+    RUN_FOLDER=`echo "$(cd "$(dirname "${RUN_FOLDER}")"; pwd)/$(basename "${RUN_FOLDER}")"`
+    # echo ${RUN_FOLDER}
+fi
+
+RUN=`find ${RUN_FOLDER} -iname "*.run.tsv"`
+
+# get run file with sra suffix
+if [ -z ${RUN} ]
+then 
+    RUN=`find ${RUN_FOLDER} -iname "*.sra.tsv"`
+fi 
+
+BIOSAMPLE=`find ${RUN_FOLDER} -iname "*.biosample.tsv"`
+SITES=`find ${RUN_FOLDER} -iname "*SiteID*.tsv"`
+IDPH=`find ${RUN_FOLDER} -iname "*IDPH.csv"`
+CDPH=`find ${RUN_FOLDER} -iname "*CDPH.csv"`
+
+if [ ${DEBUG} -eq 1 ]
+then
+    echo Files:
+    echo ------------------------
+    echo RUN:       $RUN
+    echo BIOSAMPLE: $BIOSAMPLE
+    echo SITES:     $SITES
+    echo IDPH:      $IDPH
+    echo CDPH:      $CDPH
+    echo
+    echo Options:
+    echo ------------------------
+    echo HELP:      $HELP 
+    echo RUN_FOL.:  ${RUN_FOLDER} 
+    echo 
+fi
+
+
+
+if [ -f ${IDPH} ]
+then
+    HEADER=`head -n 1 ${IDPH}`
+elif [ -f ${CDPH} ]
+then
+    HEADER=`head -n 1 ${IDPH}`
+else
+    echo Missing IDPH of CDPH sample file
+fi
+
+echo ${HEADER} > ${RUN_FOLDER}/SRA/samples.csv
+SAMPLES=`cat $IDPH $CDPH | grep -v sample_id >> ${RUN_FOLDER}/SRA/samples.csv ; echo ${RUN_FOLDER}/SRA/samples.csv`
+
+DOCKER=`which docker`
+SINGULARITY=`which singularity`
+
+if [ ${DEBUG} -eq 1 ]
+then
+    echo Container:
+    echo ------------------------
+    echo DOCKER:    ${DOCKER}
+    echo SINGUL.:   ${SINGULARITY}
+    echo 
+fi
+
+
+
+
+if [ ${DEBUG} -eq 1 ]
+then
+    echo Executing:
+    echo ------------------------
+fi
+
+if [ ! -z $SINGULARITY ]
+then
+    echo FOUND ${SINGULARITY} - NOT TESTED
+    echo COMMAND: singularity exec --bind $RUN_FOLDER:$RUN_FOLDER docker://wilke/anlseq-sra:latest python3 /anl-seq-service/lib/python/SRA.py \
+        --run-template ${RUN} \
+        --run-output ${RUN}.tmp \
+        --biosample-template ${BIOSAMPLE} \
+        --biosample-output ${BIOSAMPLE}.tmp \
+        --sites ${SITES} \
+        --samples ${SAMPLES} \
+        --sequence-dir ${RUN_FOLDER}
+elif [ ! -z ${DOCKER} ]
+then
+    if [ ${DEBUG} -eq 1 ]
+    then
+        echo FOUND: $DOCKER
+        echo COMMAND:   ${DOCKER} run -v $RUN_FOLDER:$RUN_FOLDER wilke/anlseq-sra:1.0 \
+        --run-template ${RUN} \
+        --run-output ${RUN}.tmp \
+        --biosample-template ${BIOSAMPLE} \
+        --biosample-output ${BIOSAMPLE}.tmp \
+        --sites ${SITES} \
+        --samples ${SAMPLES} \
+        --sequence-dir ${RUN_FOLDER}
+    else
+        ${DOCKER} run -v wilke/anlseq-sra:1.0 --help
+    fi
+else
+    echo Missing Singularity: ${SINGULARITY}
+    echo Missing Docker: ${DOCKER}
+fi
