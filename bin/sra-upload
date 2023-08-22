@@ -5,7 +5,8 @@
 # constants
 SHOCK_SERVER="http://shock.metagenomics.anl.gov"
 DEBUG=0
-
+IMAGE="wilke/anl-seq-service"
+TAG=latest
 
 function usage { 
 echo "list files available for RUN_FOLDER_NAME "
@@ -128,21 +129,33 @@ fi
 
 if [ ! -z $SINGULARITY ]
 then
-    echo FOUND ${SINGULARITY} - NOT TESTED
-    echo COMMAND: singularity exec --bind $RUN_FOLDER:$RUN_FOLDER docker://wilke/anlseq-sra:latest python3 /anl-seq-service/lib/python/SRA.py \
-        --run-template ${RUN} \
-        --run-output ${RUN}.tmp \
-        --biosample-template ${BIOSAMPLE} \
-        --biosample-output ${BIOSAMPLE}.tmp \
-        --sites ${SITES} \
-        --samples ${SAMPLES} \
-        --sequence-dir ${RUN_FOLDER}
+    if [ ${DEBUG} -eq 1 ]
+    then
+        echo FOUND ${SINGULARITY} - NOT TESTED
+        echo COMMAND: singularity exec --bind $RUN_FOLDER:$RUN_FOLDER docker://${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
+            --run-template ${RUN} \
+            --run-output ${RUN}.tmp \
+            --biosample-template ${BIOSAMPLE} \
+            --biosample-output ${BIOSAMPLE}.tmp \
+            --sites ${SITES} \
+            --samples ${SAMPLES} \
+            --sequence-dir ${RUN_FOLDER}
+    else
+        singularity exec --bind $RUN_FOLDER:$RUN_FOLDER docker://${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
+            --run-template ${RUN} \
+            --run-output ${RUN}.tmp \
+            --biosample-template ${BIOSAMPLE} \
+            --biosample-output ${BIOSAMPLE}.tmp \
+            --sites ${SITES} \
+            --samples ${SAMPLES} \
+            --sequence-dir ${RUN_FOLDER}
+    fi
 elif [ ! -z ${DOCKER} ]
 then
     if [ ${DEBUG} -eq 1 ]
     then
         echo FOUND: $DOCKER
-        echo COMMAND:   ${DOCKER} run -v $RUN_FOLDER:$RUN_FOLDER wilke/anlseq-sra:1.0 \
+        echo COMMAND:   ${DOCKER} run -v $RUN_FOLDER:$RUN_FOLDER ${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
         --run-template ${RUN} \
         --run-output ${RUN}.tmp \
         --biosample-template ${BIOSAMPLE} \
@@ -151,7 +164,14 @@ then
         --samples ${SAMPLES} \
         --sequence-dir ${RUN_FOLDER}
     else
-        ${DOCKER} run -v wilke/anlseq-sra:1.0 --help
+        ${DOCKER} run -v $RUN_FOLDER:$RUN_FOLDER ${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
+        --run-template ${RUN} \
+        --run-output ${RUN}.tmp \
+        --biosample-template ${BIOSAMPLE} \
+        --biosample-output ${BIOSAMPLE}.tmp \
+        --sites ${SITES} \
+        --samples ${SAMPLES} \
+        --sequence-dir ${RUN_FOLDER}
     fi
 else
     echo Missing Singularity: ${SINGULARITY}
