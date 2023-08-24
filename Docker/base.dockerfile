@@ -23,7 +23,7 @@ RUN apt install -y \
    python3-setuptools \
    python3-pip\
    unzip \
-   vi \
+   vim \
    wget 
   
 
