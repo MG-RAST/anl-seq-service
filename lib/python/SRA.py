@@ -198,8 +198,20 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
             row[map2['ww_surv_target_1_conc']] = mapping['samples'][row[0]]['pcr_target_avg_conc']
 
             type = mapping['samples'][row[0]]['sample_type']
-            row[map2['ww_sample_type']] = type
-            row[map2['ww_sample_duration']] = type 
+
+            duration = str(type.split("-")[0]) + "H"
+
+            if re.search("composite|passive", type) :
+                row[map2['ww_sample_type']] = 'composite'
+            elif re.search("grab", type) :
+                row[map2['ww_sample_type']] = 'grab'
+            else:
+                row[map2['ww_sample_type']] = 'missing'
+                logger.error("Can not identify sample type from: %s" , type)
+
+
+            row[map2['ww_sample_duration']] = duration 
+
         else:
             logger.error("ID %s not in mapping, probably missing from %s." , row[0] , args.samples)
 
