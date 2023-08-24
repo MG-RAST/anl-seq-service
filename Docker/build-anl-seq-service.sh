@@ -1,7 +1,7 @@
 
 TAG=0.1
 CACHE="--no-cache"
-CACHE=""
+# CACHE=""
 
 # docker build ${CACHE} --platform linux/arm64 -t wilke/anl-seq-service:arm64 -f Docker/base.dockerfile .
 # docker build ${CACHE} --platform linux/amd64 -t wilke/anl-seq-service:amd64 -f Docker/base.dockerfile .
