@@ -4,6 +4,7 @@ import sys
 import os
 import re
 import glob
+import pysftp
 
 logging.basicConfig(format='%(levelname)s %(asctime)s\t%(message)s', level=logging.INFO)
 
@@ -429,6 +430,79 @@ def read_run_template(run_template=None):
 
     return (header , data, constants)
 
+
+
+def upload_fastqs(user="IL_NWSS", password=None, source=None , url="eft.cdc.gov" , dest="/Data/Test/", run_file=None, biosample_file=None ) :
+
+    port = 22
+
+    fastqs = []
+    if run_file :
+        with open(run_file) as r :
+            
+            # Find filename columns
+            header=[]
+            header_row = r.readline() 
+            header_columns = header_row.rstrip().split("\t")
+            for i,v in enumerate(header_columns) :
+                if re.search("filename", v ) :
+                    header.append(i)
+            logger.debug("Found filename header: %s" , header)   
+
+            # Find files from filename columns
+            for line in r :
+                columns = line.rstrip().split("\t")
+                for i in header :
+                    if columns[i] :
+                        fastqs.append(columns[i])
+                    else:
+                        # logger.warning("No value in filename column %s" , str(i))
+                        pass
+
+
+    try:
+        sftp = pysftp.Connection(host=url ,port=port, username=user, password=password)
+        print("connection established successfully")
+
+        if sftp.isdir(dest) :
+            with sftp.cd(dest):
+                logger.debug("Changed into %s" , dest)
+                # for f in sftp.listdir():
+                #     print(f)
+        
+                for f in fastqs :
+                    # upload
+                    file_path = f
+                    if os.path.isdir(source) :
+                        file_path = source + "/" + f
+                    
+                    # upload
+                    if os.path.isfile(file_path) :
+                        logger.info("Uploading %s" , file_path)
+                        sftp.put(file_path, preserve_mtime=True)
+
+        else :
+            logger.error("No such directory %s at %s" , dest, url )
+
+        if run_file and os.path.isfile(run_file) :
+            logger.debug("Uploading run file: %s" , run_file)
+            sftp.put(run_file, preserve_mtime=True)
+        else :
+            logger.error("Missing run file for upload")
+        
+        if biosample_file and os.path.isfile(biosample_file) :
+            logger.debug("Uploading biosample file: %s" , biosample_file)
+            sftp.put(biosample_file, preserve_mtime=True)
+        else :
+            logger.error("Misisng biosample file for upload")
+
+        sftp.close()
+
+    except:
+        print('failed to establish connection to targeted server')
+    pass
+
+
 def command_line_options():
     """Define and parse command line options"""
     parser = argparse.ArgumentParser(description='Command line options for creating SRA metadata file from template')
@@ -437,10 +511,14 @@ def command_line_options():
                     help='template file for a given run')
     parser.add_argument('--run-output', dest='run_output', default=None, 
                     help='run file, created from --run-template and --sequence-dir')
+    parser.add_argument('--run-file', dest='run_file', default=None, 
+                    help='Upload run file, created from --run-template and --sequence-dir. Same as --run-output')
     parser.add_argument('--biosample-template', dest='biosample_template', 
                     help='biosample template file for a given run')
     parser.add_argument('--biosample-output', dest='biosample_output', default=None, 
                     help='biosample file, created from --biosample-template and --sequence-dir')
+    parser.add_argument('--biosample-file', dest='biosample_file', default=None, 
+                    help='upload biosample file, created from --biosample-template and --sequence-dir , same as --biosample-output')
     parser.add_argument('--sites', dest='sites', default=None, 
                     help='sites mapping file, contains collected_by and ww_population')
     parser.add_argument('--mapping', dest='mapping', 
@@ -451,6 +529,16 @@ def command_line_options():
                     help='sample file, contains sample metadata; probably csv')
     parser.add_argument('--log-level', dest='level', choices=["DEBUG", "INFO" , "WARNINGS" , "ERROR"], default="INFO" ,
                     help='sample file, contains sample metadata; probably csv')
+    parser.add_argument('--upload', dest='upload', default=False , action="store_true",
+                    help='enable to upload sequence files, requires run file')
+    parser.add_argument('--upload-dir', dest='upload_dir',  default="/Data/Prod/" ,
+                    help='path on ftp site')
+    parser.add_argument('--upload-url', dest='upload_url',  default="eft.cdc.gov" ,
+                    help='path on ftp site')
+    parser.add_argument('--user', dest='user',  default=None ,
+                    help='user for ftp')
+    parser.add_argument('--password', dest='password', default=None ,
+                    help='password for ftp user')
     
 
     args = parser.parse_args()
@@ -472,11 +560,26 @@ def main(args) :
         samples = fastqs_to_samples(fastq)
         (header, data, const) = read_template(template=args.run_template)
         make_run_file(header=header, data=data, constants=const, samples=samples, mapping=None , output=args.run_output)
+        if not args.run_file :
+            args.run_file = args.run_output
 
     if args.biosample_template :
         sites = read_site_ID(args.sites)
         (header, data, const) = read_template(template=args.biosample_template)
         make_biosample_file(header=header, data=data, constants=const,  mapping=metadata , output=args.biosample_output , sites=sites)
+        if not args.biosample_file :
+            args.biosample_file = args.biosample_output
+
+    if args.upload :
+        if args.user and args.password and args.dir :
+            folder = args.upload_dir
+            upload_fastqs(user=args.user, password=args.password, source=args.dir , url=args.upload_url , dest=args.upload_dir, run_file=args.run_file, biosample_file=args.biosample_file)
+
+        else :
+            logger.error("Missing user, password or url for upload.")
+
+
+    
 
 
 if __name__ == '__main__' :
