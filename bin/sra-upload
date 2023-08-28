@@ -6,6 +6,7 @@
 SHOCK_SERVER="http://shock.metagenomics.anl.gov"
 DEBUG=0
 UPDATE=0
+UPLOAD=0
 IMAGE="wilke/anl-seq-service"
 TAG=latest
 
@@ -14,6 +15,7 @@ echo "list files available for RUN_FOLDER_NAME "
 echo "Usage: $0 [-h <help>] -r <run folder>"
 echo " -d enable debugging \
 -u update image
+-p push to sftp
 "
  }
 
@@ -28,6 +30,7 @@ while getopts hr:dxu option; do
         d) DEBUG=1;;
 		x) DELETE=1;;
         u) UPDATE=1;;
+        p) UPLOAD=1;;
 		*)
 		usage
 		;;
