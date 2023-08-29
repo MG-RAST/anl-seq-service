@@ -335,7 +335,7 @@ def read_template(template=None):
     return (header , data, constants)
 
 def read_samples(file):
-    logger.debug("Reading sample metadata from " + str(file))
+    logger.info("Reading sample metadata from " + str(file))
 
     md = { 
         'header': None ,
@@ -369,7 +369,7 @@ def read_samples(file):
             if len(i2h) < len(col) :
                 error = True
                 msg = "Mismatch number of columns in header row versus number of columns in data rows"
-                logger.warning("Number of header columns does not match columns in row %i." , l)
+                # logger.warning("Number of header columns does not match columns in row %i." , l) 
             l += 1
 
     md['data'] = data
@@ -461,7 +461,9 @@ def upload_fastqs(user="IL_NWSS", password=None, source=None , url="eft.cdc.gov"
 
 
     try:
-        sftp = pysftp.Connection(host=url ,port=port, username=user, password=password)
+        cnopts = pysftp.CnOpts()
+        cnopts.hostkeys = None
+        sftp = pysftp.Connection(host=url ,port=port, username=user, password=password, cnopts=cnopts)
         print("connection established successfully")
 
         if sftp.isdir(dest) :
