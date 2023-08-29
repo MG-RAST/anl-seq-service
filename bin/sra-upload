@@ -310,16 +310,6 @@ then
         --sequence-dir ${RUN_FOLDER}
         if [ $UPLOAD -eq 1 ]
         then
-        # python lib/python/SRA.py 
-        # --upload 
-        # --user IL_NWSS 
-        # --password 96337vPH 
-        # --upload-url eft.cdc.gov 
-        # --upload-dir /Data/Test/ 
-        # --sequence-dir tmp/sequences 
-        # --run-file tmp/sequences/SRA/230712.SRA.tsv.tmp 
-        # --log-level DEBUG 
-        # --biosample-file tmp/sequences/SRA/230712.Biosample.tsv.tmp
             ${DOCKER} run -v $RUN_FOLDER:$RUN_FOLDER ${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
             --upload \
             --user ${FTP_USER} \
