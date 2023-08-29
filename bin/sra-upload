@@ -2,25 +2,53 @@
 
 # remove all available files for a given RUN_FOLDER_NAME
 
-# constants
+# Constants
 SHOCK_SERVER="http://shock.metagenomics.anl.gov"
 DEBUG=0
 UPDATE=0
 UPLOAD=0
+HELP=0
 IMAGE="wilke/anl-seq-service"
 TAG=latest
+LOG_LEVEL=INFO
+
+# FTP config
+FTP_URL="${FTP_URL:-eft.cdc.gov}" 
+FTP_DEST="${FTP_DEST:-/Data/Test/}"
+
+if [ -z "${FTP_USER}" ] ; then
+    echo Please set FTP_USER, e.g. export FTP_USER=
+    exit 1
+fi
+
+if [ -z "${FTP_PASSWORD}" ] ; then
+    echo Please set FTP_PASSWORD, e.g. export FTP_PASSWORD=
+    exit 1
+fi
+
+
+
 
 function usage { 
-echo "list files available for RUN_FOLDER_NAME "
-echo "Usage: $0 [-h <help>] -r <run folder>"
-echo " -d enable debugging \
--u update image
--p push to sftp
+echo "Create RUN and BIOSAMPLE files and upload fastqs"
+echo --------------------------------------------------
+echo "Usage: $0 [-h <help>] [-u,-p] -r <run folder>"
+echo "-d : Dry-run ; debugging"
+echo "-u : Update container image"
+echo "-p : Push fastqs, RUN and BIOSAMPLE files to sftp"
+
+echo "
+Set following environment variables:
+
+export FTP_USER=
+export FTP_PASSWORD=
+export FTP_URL=
+export FTP_DEST=/Data/Prod
 "
- }
+  }
 
 # get options
-while getopts hr:dxu option; do
+while getopts hr:dxup option; do
     case "${option}"
         in
 		h) 
@@ -37,6 +65,11 @@ while getopts hr:dxu option; do
     esac
 done
 
+if [ $HELP -eq 1 ]
+then
+    usage
+    exit 0
+fi
 
 
 #   -h, --help            show this help message and exit
@@ -69,15 +102,15 @@ then
     # echo ${RUN_FOLDER}
 fi
 
-RUN=`find ${RUN_FOLDER} -iname "*.run.tsv"`
+RUN=`find ${RUN_FOLDER} -iname "*.run.tmpl.tsv"`
 
 # get run file with sra suffix
 if [ -z ${RUN} ]
 then 
-    RUN=`find ${RUN_FOLDER} -iname "*.sra.tsv"`
+    RUN=`find ${RUN_FOLDER} -iname "*.sra.tmpl.tsv"`
 fi 
 
-BIOSAMPLE=`find ${RUN_FOLDER} -iname "*.biosample.tsv"`
+BIOSAMPLE=`find ${RUN_FOLDER} -iname "*.biosample.tmpl.tsv"`
 SITES=`find ${RUN_FOLDER} -iname "*SiteID*.tsv"`
 IDPH=`find ${RUN_FOLDER} -iname "*IDPH.csv"`
 CDPH=`find ${RUN_FOLDER} -iname "*CDPH.csv"`
@@ -100,20 +133,32 @@ then
     exit 1
 fi
 
+# Create output file names
+
+BIOSAMPLE_FILE_PATH=`dirname $BIOSAMPLE`
+BIOSAMPLE_FILE_DEST=${BIOSAMPLE_FILE_PATH}/`basename -s .tmpl.tsv $BIOSAMPLE`.tsv
+RUN_FILE_PATH=`dirname $RUN`
+RUN_FILE_DEST=${RUN_FILE_PATH}/`basename -s .tmpl.tsv $RUN`.tsv
+
+
 if [ ${DEBUG} -eq 1 ]
 then
     echo Files:
     echo ------------------------
-    echo RUN:       $RUN
-    echo BIOSAMPLE: $BIOSAMPLE
-    echo SITES:     $SITES
-    echo IDPH:      $IDPH
-    echo CDPH:      $CDPH
+    echo RUN TEMPLATE:  $RUN
+    echo RUN OUTRPUT:   $RUN_DEST
+    echo BIOSAM. TMPL:  $BIOSAMPLE
+    echo BIOSAM. OUT.:  $BIOSAMPLE_DEST
+    echo SITES:         $SITES
+    echo IDPH:          $IDPH
+    echo CDPH:          $CDPH
     echo
     echo Options:
     echo ------------------------
     echo HELP:      $HELP 
     echo UPDATE:    $UPDATE
+    echo UPLOAD:    $UPLOAD
+    echo DEBUG:     $DEBUG
     echo RUN_FOL.:  ${RUN_FOLDER} 
     echo 
 fi
@@ -166,12 +211,26 @@ then
         fi
         echo COMMAND: singularity exec --bind $RUN_FOLDER:$RUN_FOLDER docker://${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
             --run-template ${RUN} \
-            --run-output ${RUN}.tmp \
+            --run-output ${RUN_FILE_DEST} \
             --biosample-template ${BIOSAMPLE} \
-            --biosample-output ${BIOSAMPLE}.tmp \
+            --biosample-output ${BIOSAMPLE_FILE_DEST} \
             --sites ${SITES} \
             --samples ${SAMPLES} \
             --sequence-dir ${RUN_FOLDER}
+        if [ $UPLOAD -eq 1 ]
+        then
+            echo
+            echo UPLOAD: singularity exec --bind $RUN_FOLDER:$RUN_FOLDER docker://${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
+            --upload \
+            --user ${FTP_USER} \
+            --password ${FTP_PASSWORD} \
+            --upload-url ${FTP_URL} \
+            --upload-dir ${FTP_DEST} \
+            --sequence-dir ${RUN_FOLDER} \
+            --run-file ${RUN_FILE_DEST} \
+            --biosample-file ${BIOSAMPLE_FILE_DEST} \
+            --log-level ${LOG_LEVEL}
+        fi
     else
         if [ $UPDATE -eq 1 ]
         then
@@ -180,12 +239,26 @@ then
         fi
         singularity exec --bind $RUN_FOLDER:$RUN_FOLDER docker://${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
             --run-template ${RUN} \
-            --run-output ${RUN}.tmp \
+            --run-output ${RUN_FILE_DEST} \
             --biosample-template ${BIOSAMPLE} \
-            --biosample-output ${BIOSAMPLE}.tmp \
+            --biosample-output ${BIOSAMPLE_FILE_DEST} \
             --sites ${SITES} \
             --samples ${SAMPLES} \
             --sequence-dir ${RUN_FOLDER}
+        if [ $UPLOAD -eq 1 ]
+        then
+            singularity exec --bind $RUN_FOLDER:$RUN_FOLDER docker://${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
+            --upload \
+            --user ${FTP_USER} \
+            --password ${FTP_PASSWORD} \
+            --upload-url ${FTP_URL} \
+            --upload-dir ${FTP_DEST} \
+            --sequence-dir ${RUN_FOLDER} \
+            --run-file ${RUN_FILE_DEST} \
+            --biosample-file ${BIOSAMPLE_FILE_DEST} \
+            --log-level ${LOG_LEVEL}
+        fi
+ 
     fi
 elif [ ! -z ${DOCKER} ]
 then
@@ -199,12 +272,28 @@ then
         fi
         echo COMMAND:   ${DOCKER} run -v $RUN_FOLDER:$RUN_FOLDER ${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
         --run-template ${RUN} \
-        --run-output ${RUN}.tmp \
+        --run-output ${RUN_FILE_DEST} \
         --biosample-template ${BIOSAMPLE} \
-        --biosample-output ${BIOSAMPLE}.tmp \
+        --biosample-output ${BIOSAMPLE_FILE_DEST} \
         --sites ${SITES} \
         --samples ${SAMPLES} \
         --sequence-dir ${RUN_FOLDER}
+        if [ $UPLOAD -eq 1 ]
+        then
+            echo 
+            echo UPLOAD: ${DOCKER} run -v $RUN_FOLDER:$RUN_FOLDER ${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
+            --upload \
+            --user ${FTP_USER} \
+            --password ${FTP_PASSWORD} \
+            --upload-url ${FTP_URL} \
+            --upload-dir ${FTP_DEST} \
+            --sequence-dir ${RUN_FOLDER} \
+            --run-file ${RUN_FILE_DEST} \
+            --biosample-file ${BIOSAMPLE_FILE_DEST} \
+            --log-level ${LOG_LEVEL}
+        else
+            echo NO UPLOAD
+        fi
     else
         if [ $UPDATE -eq 1 ]
         then
@@ -213,12 +302,35 @@ then
         fi
         ${DOCKER} run -v $RUN_FOLDER:$RUN_FOLDER ${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
         --run-template ${RUN} \
-        --run-output ${RUN}.tmp \
+        --run-output ${RUN_FILE_DEST} \
         --biosample-template ${BIOSAMPLE} \
-        --biosample-output ${BIOSAMPLE}.tmp \
+        --biosample-output ${BIOSAMPLE_FILE_DEST} \
         --sites ${SITES} \
         --samples ${SAMPLES} \
         --sequence-dir ${RUN_FOLDER}
+        if [ $UPLOAD -eq 1 ]
+        then
+        # python lib/python/SRA.py 
+        # --upload 
+        # --user IL_NWSS 
+        # --password 96337vPH 
+        # --upload-url eft.cdc.gov 
+        # --upload-dir /Data/Test/ 
+        # --sequence-dir tmp/sequences 
+        # --run-file tmp/sequences/SRA/230712.SRA.tsv.tmp 
+        # --log-level DEBUG 
+        # --biosample-file tmp/sequences/SRA/230712.Biosample.tsv.tmp
+            ${DOCKER} run -v $RUN_FOLDER:$RUN_FOLDER ${IMAGE}:${TAG} python3 /anl-seq-service/lib/python/SRA.py \
+            --upload \
+            --user ${FTP_USER} \
+            --password ${FTP_PASSWORD} \
+            --upload-url ${FTP_URL} \
+            --upload-dir ${FTP_DEST} \
+            --sequence-dir ${RUN_FOLDER} \
+            --run-file ${RUN_FILE_DEST} \
+            --biosample-file ${BIOSAMPLE_FILE_DEST} \
+            --log-level ${LOG_LEVEL}
+        fi
     fi
 else
     echo Missing Singularity: ${SINGULARITY}
