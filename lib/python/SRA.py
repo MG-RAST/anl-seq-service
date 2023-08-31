@@ -190,15 +190,15 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
 
         if row[0] in mapping['samples'] :
             # fill in collected_by and ww_population based on sites file
-            row[map2['collected_by']] = sites[row[map2["collection_site_id"]]]['collected_by']
-            row[map2['ww_population']] = sites[row[map2["collection_site_id"]]]['ww_population']
+            row[map2['collected_by']] = sites[row[map2["collection_site_id"]]]['collected_by'] if sites[row[map2["collection_site_id"]]]['collected_by'] else "not collected"
+            row[map2['ww_population']] = sites[row[map2["collection_site_id"]]]['ww_population'] if sites[row[map2["collection_site_id"]]]['ww_population'] else "not collected"
 
             # metadata from NWSS samples file
-            row[map2['collection_date']] = mapping['samples'][row[0]]['sample_collect_date']
-            row[map2['collection_time']] = mapping['samples'][row[0]]['sample_collect_time']
-            row[map2['ww_surv_target_1_conc']] = mapping['samples'][row[0]]['pcr_target_avg_conc']
+            row[map2['collection_date']] = mapping['samples'][row[0]]['sample_collect_date'] if mapping['samples'][row[0]]['sample_collect_date'] else "not collected"
+            row[map2['collection_time']] = mapping['samples'][row[0]]['sample_collect_time'] if mapping['samples'][row[0]]['sample_collect_time'] else "not collected"
+            row[map2['ww_surv_target_1_conc']] = mapping['samples'][row[0]]['pcr_target_avg_conc'] if mapping['samples'][row[0]]['pcr_target_avg_conc'] else "not collected"
 
-            type = mapping['samples'][row[0]]['sample_type']
+            type = mapping['samples'][row[0]]['sample_type'] if mapping['samples'][row[0]]['sample_type'] else "not collected"
 
             duration = str(type.split("-")[0]) + "H"
 
