@@ -139,7 +139,7 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
     # assuming sample_name column is index 0
     sample_idx  = 0
     idx   = []
-
+    word = re.compile("\w+") 
     map2 = {}
 
     # find columns
@@ -190,13 +190,13 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
 
         if row[0] in mapping['samples'] :
             # fill in collected_by and ww_population based on sites file
-            row[map2['collected_by']] = sites[row[map2["collection_site_id"]]]['collected_by'] if sites[row[map2["collection_site_id"]]]['collected_by'] else "not collected"
-            row[map2['ww_population']] = sites[row[map2["collection_site_id"]]]['ww_population'] if sites[row[map2["collection_site_id"]]]['ww_population'] else "not collected"
+            row[map2['collected_by']] = sites[row[map2["collection_site_id"]]]['collected_by'] if word.search(sites[row[map2["collection_site_id"]]]['collected_by']) else "not collected"
+            row[map2['ww_population']] = sites[row[map2["collection_site_id"]]]['ww_population'] if word.search(sites[row[map2["collection_site_id"]]]['ww_population']) else "not collected"
 
             # metadata from NWSS samples file
-            row[map2['collection_date']] = mapping['samples'][row[0]]['sample_collect_date'] if mapping['samples'][row[0]]['sample_collect_date'] else "not collected"
-            row[map2['collection_time']] = mapping['samples'][row[0]]['sample_collect_time'] if mapping['samples'][row[0]]['sample_collect_time'] else "not collected"
-            row[map2['ww_surv_target_1_conc']] = mapping['samples'][row[0]]['pcr_target_avg_conc'] if mapping['samples'][row[0]]['pcr_target_avg_conc'] else "not collected"
+            row[map2['collection_date']] = mapping['samples'][row[0]]['sample_collect_date'] if word.search(mapping['samples'][row[0]]['sample_collect_date']) else "not collected"
+            row[map2['collection_time']] = mapping['samples'][row[0]]['sample_collect_time'] if word.search(mapping['samples'][row[0]]['sample_collect_time']) else "not collected"
+            row[map2['ww_surv_target_1_conc']] = mapping['samples'][row[0]]['pcr_target_avg_conc'] if word.search(mapping['samples'][row[0]]['pcr_target_avg_conc']) else "not collected"
 
             type = mapping['samples'][row[0]]['sample_type'] if mapping['samples'][row[0]]['sample_type'] else "not collected"
 
@@ -215,6 +215,40 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
 
         else:
             logger.error("ID %s not in mapping, probably missing from %s." , row[0] , args.samples)
+            # Set defaults
+            
+            # fill in collected_by and ww_population based on sites file
+            row[map2['collected_by']] = sites[row[map2["collection_site_id"]]]['collected_by'] if sites[row[map2["collection_site_id"]]]['collected_by'] else "not collected"
+            row[map2['ww_population']] = sites[row[map2["collection_site_id"]]]['ww_population'] if sites[row[map2["collection_site_id"]]]['ww_population'] else "not collected"            
+    
+
+            # metadata from NWSS samples file
+            row[map2['collection_date']] = "not collected"
+            row[map2['collection_time']] = "not collected"
+            row[map2['ww_surv_target_1_conc']] = "not collected"
+
+            type = mapping['samples'][row[0]]['sample_type'] if row[0] in mapping['samples'] else "not collected"
+
+            # set default to "not collected" and duration to zero
+            duration = "0"
+            row[map2['ww_sample_type']] = "not collected"
+            
+            if not type == "not collected" :
+
+                duration = str(type.split("-")[0]) if not type == "not collected" else 0
+   
+
+                if re.search("composite|passive", type) :
+                    row[map2['ww_sample_type']] = 'composite'
+                elif re.search("grab", type) :
+                  row[map2['ww_sample_type']] = 'grab'
+                  duration = "0"
+                else:
+                   row[map2['ww_sample_type']] = 'missing'
+                   logger.error("Can not identify sample type from: %s" , type)
+
+
+            row[map2['ww_sample_duration']] = duration 
 
 
         if fh :
