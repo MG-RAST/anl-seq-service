@@ -200,12 +200,13 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
 
             type = mapping['samples'][row[0]]['sample_type'] if mapping['samples'][row[0]]['sample_type'] else "not collected"
 
-            duration = str(type.split("-")[0]) + "H"
+            duration = str(type.split("-")[0])
 
             if re.search("composite|passive", type) :
                 row[map2['ww_sample_type']] = 'composite'
             elif re.search("grab", type) :
                 row[map2['ww_sample_type']] = 'grab'
+                duration="0"
             else:
                 row[map2['ww_sample_type']] = 'missing'
                 logger.error("Can not identify sample type from: %s" , type)
