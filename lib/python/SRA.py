@@ -116,19 +116,20 @@ def fastqs_to_samples(list_of_fastqs) :
             "R2" : None 
             }
 
-        k = "file"
-        v = None
+        k = "file" # key
+        v = None   # value
 
-        if "R1" in parts or "R2" in parts:
-            logger.debug("Found R1 or R2 in %s.", f)
-            k = parts[2]
-            v = f
+        for p in parts:
+            if "R1" == p  or "R2" == p:
+                logger.debug("Found %s in %s.", p,f)
+                k = p
+                v = f
        
         if not ID in samples :
             samples[ID] = sample
     
         samples[ID][k]=v
-
+    # logger.debug(str(samples))
     logger.info("Found %s samples" , len(samples.keys()))
     return samples
 
