@@ -35,7 +35,7 @@ def CLI():
     parser.add_argument('--list', dest='list', default=False, action='store_true' ,
                     help='Do not copy but print list of source files.')
     parser.add_argument('--level', dest='level', default="INFO", choices=['INFO', 'DEBUG', 'WARNING' ,'ERROR', 'CRITICAL'] ,
-                    help='Do not copy but print list of source files.')
+                    help='Set level of verbosity')
                 
     args = parser.parse_args()
 
