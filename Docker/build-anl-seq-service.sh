@@ -1,5 +1,5 @@
 
-TAG=0.1
+TAG=0.1.1
 #CACHE="--no-cache"
 CACHE=""
 
@@ -16,4 +16,4 @@ CACHE=""
 
 
 docker buildx build ${CACHE} --platform linux/amd64,linux/arm64 -t wilke/anl-seq-service:latest --push -f Docker/base.dockerfile .
-docker buildx build ${CACHE} --platform linux/amd64,linux/arm64 -t wilke/anl-seq-service:0.1 --push -f Docker/base.dockerfile .
+docker buildx build ${CACHE} --platform linux/amd64,linux/arm64 -t wilke/anl-seq-service:${TAG} --push -f Docker/base.dockerfile .
