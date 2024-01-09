@@ -145,7 +145,7 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
 
     # find columns
     for i,v in enumerate(header) :
-        if re.search("filename|sample_name|collection_date|collection_time|collection_site_id|collected_by|ww_population|ww_sample_type|ww_sample_duration|ww_surv_system_sample_id|ww_surv_target_1_conc", v) :
+        if re.search("filename|sample_name|collection_date|collection_time|collection_site_id|collected_by|ww_population|ww_sample_type|ww_sample_duration|ww_surv_system_sample_id|ww_surv_target_1_conc|ww_surv_jurisdiction", v) :
             idx.append(i)
             map2[v] = i
             logger.debug("Found column %s : %s", v , str(i))
@@ -198,6 +198,9 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
             row[map2['collection_date']] = mapping['samples'][row[0]]['sample_collect_date'] if word.search(mapping['samples'][row[0]]['sample_collect_date']) else "not collected"
             row[map2['collection_time']] = mapping['samples'][row[0]]['sample_collect_time'] if word.search(mapping['samples'][row[0]]['sample_collect_time']) else "not collected"
             row[map2['ww_surv_target_1_conc']] = mapping['samples'][row[0]]['pcr_target_avg_conc'] if word.search(mapping['samples'][row[0]]['pcr_target_avg_conc']) else "not collected"
+
+            ### addition mapping from reporting_jurisdiction to ww_surv_jurisdiction 
+            row[map2['ww_surv_jurisdiction']] = mapping['samples'][row[0]]['reporting_jurisdiction']
 
             type = mapping['samples'][row[0]]['sample_type'] if mapping['samples'][row[0]]['sample_type'] else "not collected"
 
