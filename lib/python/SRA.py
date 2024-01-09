@@ -184,10 +184,13 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
                 else :
                     row[i] = ''
         
-        if not row[map2['ww_surv_system_sample_id']] :
-            row[map2['ww_surv_system_sample_id']] = row[map2['sample_name']]
-        else:
-            logger.debug("Found existing ww_surv_system_sample_id:\t" + row[map2['ww_surv_system_sample_id']] )
+        # if not row[map2['ww_surv_system_sample_id']] :
+        #     row[map2['ww_surv_system_sample_id']] = row[map2['sample_name']]
+        # else:
+        #     logger.debug("Found existing ww_surv_system_sample_id:\t" + row[map2['ww_surv_system_sample_id']] )
+
+        # talked to Sarah - always set to sample_name
+        row[map2['ww_surv_system_sample_id']] = row[map2['sample_name']]
 
         if row[0] in mapping['samples'] :
             # fill in collected_by and ww_population based on sites file
