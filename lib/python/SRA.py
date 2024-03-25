@@ -209,14 +209,19 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
 
             duration = str(type.split("-")[0])
 
+            # default to "not collected" and duration to zero
+            row[map2['ww_sample_type']] = 'not collected'
+
             if re.search("composite|passive", type) :
                 row[map2['ww_sample_type']] = 'composite'
             elif re.search("grab", type) :
                 row[map2['ww_sample_type']] = 'grab'
                 duration="0"
             else:
-                row[map2['ww_sample_type']] = 'missing'
-                logger.error("Can not identify sample type from: %s" , type)
+                # row[map2['ww_sample_type']] = 'missing'
+                # logger.error("Can not identify sample type from: %s" , type)
+                logger.error("Can not identify sample type from: %s. Using default: %s" , type, row[map2['ww_sample_type']])
+                duration="not collected"
 
 
             row[map2['ww_sample_duration']] = duration 
