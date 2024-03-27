@@ -202,6 +202,17 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
             row[map2['collection_time']] = mapping['samples'][row[0]]['sample_collect_time'] if word.search(mapping['samples'][row[0]]['sample_collect_time']) else "not collected"
             row[map2['ww_surv_target_1_conc']] = mapping['samples'][row[0]]['pcr_target_avg_conc'] if word.search(mapping['samples'][row[0]]['pcr_target_avg_conc']) else "not collected"
 
+            # check collection data, change date format if necessary. If format is not in yyyy-mm-dd or "not collected", change to yyyy-mm-dd
+            if not re.search("\d{4}-\d{2}-\d{2}", row[map2['collection_date']]) :
+                logger.error("Date format not in yyyy-mm-dd, changing to yyyy-mm-dd.")
+                # if date in format mm/dd/yyyy, change to yyyy-mm-dd
+                if re.search("\d{2}/\d{2}/\d{4}", row[map2['collection_date']]) :
+                    parts = row[map2['collection_date']].split("/")
+                    row[map2['collection_date']] = "-".join(parts[::-1])
+                elif row[map2['collection_date']] != "not collected" :
+                    logger.error("Date format not recognized: %s", row[map2['collection_date']])
+            
+
             ### addition mapping from reporting_jurisdiction to ww_surv_jurisdiction 
             row[map2['ww_surv_jurisdiction']] = mapping['samples'][row[0]]['reporting_jurisdiction']
 
@@ -242,7 +253,7 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
 
             type = mapping['samples'][row[0]]['sample_type'] if row[0] in mapping['samples'] else "not collected"
 
-            # set default to "not collected" and duration to zero
+            # set default to "not collected" and duration to zero, type e.g. Moore 
             duration = "0"
             row[map2['ww_sample_type']] = "not collected"
             
