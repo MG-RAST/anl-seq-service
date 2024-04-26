@@ -26,14 +26,25 @@ RUN apt install -y \
 # http://support.illumina.com/content/dam/illumina-support/documents/downloads/software/bcl2fastq/bcl2fastq2-v2-18-0-12-linux-x86-64.zip
 ADD https://support.illumina.com/content/dam/illumina-support/documents/downloads/software/bcl2fastq/bcl2fastq2-v2-19-1-linux.zip /root/bcl2fastq2.zip
 RUN  (cd /root ; unzip /root/bcl2fastq2*.zip )
-# RUN alien -i /root/bcl2fastq2-*.rpm
-
-
-# # copy local files to /usr/local/ (binaries and adapter files)
-# ADD bin/* /usr/local/bin/
-# ADD share/* /usr/local/share/
+RUN alien -i /root/bcl2fastq2-*.rpm
 
 # install CWL runner
 RUN pip3 install --upgrade pip && \
      pip3 install cwlref-runner
+
+# # copy local files to /usr/local/ (binaries and adapter files)
+ADD bin/* /usr/local/bin/
+ADD share/* /usr/local/share/
+ADD . /anl-seq-service/
+
+# install the service
+RUN pip3 install pysftp
+
+# set the entry point
+ENTRYPOINT ["python3" , "/anl-seq-service/lib/SRA.py"]
+
+# set the default command
+CMD ["--help"]
+
+
 
