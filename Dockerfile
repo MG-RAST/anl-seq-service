@@ -41,7 +41,7 @@ ADD . /anl-seq-service/
 RUN pip3 install pysftp
 
 # set the entry point
-ENTRYPOINT ["python3" , "/anl-seq-service/lib/SRA.py"]
+ENTRYPOINT ["python3" , "/anl-seq-service/lib/python/SRA.py"]
 
 # set the default command
 CMD ["--help"]
