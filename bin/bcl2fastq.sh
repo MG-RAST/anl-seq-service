@@ -45,6 +45,8 @@ CWD=$(pwd)
 # Execute the bcl2fastq command inside the singularity container
 if [[ -z "$SAMPLE_SHEET" ]]; then
     echo singularity run --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" "$SINGULARITY_IMAGE" "${ARGS[@]}"
+    singularity run --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" "$SINGULARITY_IMAGE" "${ARGS[@]}"
 else
     echo singularity run --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" --bind "$SAMPLE_SHEET":"$SAMPLE_SHEET" "$SINGULARITY_IMAGE" "${ARGS[@]}"
+    singularity run --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" --bind "$SAMPLE_SHEET":"$SAMPLE_SHEET" "$SINGULARITY_IMAGE" "${ARGS[@]}"
 fi
