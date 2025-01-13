@@ -12,6 +12,8 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         --input-dir)
             INPUT_DIR="$2"
+            ARGS+=("$1")
+            ARGS+=("$2")
             shift 2
             ;;
         *)
@@ -31,4 +33,11 @@ fi
 CWD=$(pwd)
 
 # Execute the bcl2fastq command inside the singularity container
-echo singularity exec --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" "$SINGULARITY_IMAGE" bcl2fastq "${ARGS[@]}"
+# Check if input directory is set
+if [[ -z "$INPUT_DIR" ]]; then
+    echo "Error: --input-dir is not set."
+    echo singularity exec --bind "$CWD":"$CWD" "$SINGULARITY_IMAGE"  "${ARGS[@]}"
+else
+    echo singularity exec --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" "$SINGULARITY_IMAGE"  "${ARGS[@]}"
+fi
+# echo singularity exec --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" "$SINGULARITY_IMAGE" bcl2fastq "${ARGS[@]}"
