@@ -31,4 +31,4 @@ fi
 CWD=$(pwd)
 
 # Execute the bcl2fastq command inside the singularity container
-singularity exec --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" "$SINGULARITY_IMAGE" bcl2fastq "${ARGS[@]}"
+echo singularity exec --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" "$SINGULARITY_IMAGE" bcl2fastq "${ARGS[@]}"
