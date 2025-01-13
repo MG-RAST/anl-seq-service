@@ -23,11 +23,11 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
-# Check if input directory is set
-if [[ -z "$INPUT_DIR" ]]; then
-    echo "Error: --input-dir is not set."
-    exit 1
-fi
+# # Check if input directory is set
+# if [[ -z "$INPUT_DIR" ]]; then
+#     echo "Error: --input-dir is not set."
+#     exit 1
+# fi
 
 # Get the current working directory
 CWD=$(pwd)
