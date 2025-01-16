@@ -42,6 +42,14 @@ fi
 # Get the current working directory
 CWD=$(pwd)
 
+
+# Test if SAMPLE_SHEET is absolute path otherwise make it absolute
+if [[ ! -z "$SAMPLE_SHEET" ]]; then
+    if [[ ! "$SAMPLE_SHEET" = /* ]]; then
+        SAMPLE_SHEET="$CWD/$SAMPLE_SHEET"
+    fi
+fi
+
 # Execute the bcl2fastq command inside the singularity container
 if [[ -z "$SAMPLE_SHEET" ]]; then
     echo singularity run --bind "$CWD":"$CWD" --bind "$INPUT_DIR":"$INPUT_DIR" "$SINGULARITY_IMAGE" "${ARGS[@]}"
