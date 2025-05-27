@@ -12,7 +12,7 @@
 # #############################################
 
 # constants
-SHOCK_SERVER="http://shock.metagenomics.anl.gov"
+SHOCK_SERVER="http://shock.mg-rast.org"
 TMP_TAR_FILE="/var/tmp/temporary-tar-file-shock-client.$$.tar.gz"
 rm -f ${TMP_TAR_FILE} # ensure we are not re-using an old tar file
 
