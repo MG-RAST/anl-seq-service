@@ -1,3 +1,4 @@
 *.pem
 auth.env
 tmp/*
+config/auth.sh
