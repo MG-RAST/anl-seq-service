@@ -1,0 +1,10 @@
+# export AUTH="authorization: mgrast TOKEN"
+
+# NCBI submission credentials and submitter info.
+# NCBI_CONTACT is required for `sra-upload` (used in submission.xml).
+# The other three are required when -p (FTP upload) is added.
+#
+# export NCBI_CONTACT=you@example.org
+# export NCBI_USER=
+# export NCBI_PASSWORD=
+# export NCBI_BASE_DIR=/submit/Test/
