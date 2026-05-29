@@ -40,15 +40,16 @@ echo "-r : Run folder containing SRA/ subdir with templates"
 echo "-d : Dry-run ; debugging"
 echo "-l : Run locally with system python3 (no container)"
 echo "-u : Update container image"
-echo "-p : (Phase 2, not implemented) Push package to NCBI submission FTP"
+echo "-p : Push package (fastqs + submission.xml + submit.ready) to NCBI submission FTP"
 echo ""
 echo "Required environment variables:"
 echo "  NCBI_CONTACT      Submitter contact email"
 echo ""
-echo "Environment variables for -p (Phase 2):"
+echo "Environment variables for -p:"
 echo "  NCBI_USER         NCBI submission FTP username"
 echo "  NCBI_PASSWORD     NCBI submission FTP password"
 echo "  NCBI_BASE_DIR     Account folder on ftp-private.ncbi.nlm.nih.gov"
+echo "  NCBI_HOST         (Optional) Override FTP host"
 }
 
 while getopts hr:dlup option; do
@@ -74,8 +75,12 @@ if [ -z "${RUN_FOLDER}" ] ; then
 fi
 
 if [ $UPLOAD -eq 1 ] ; then
-    echo "ERROR: -p (NCBI FTP upload) not yet implemented. Re-run without -p."
-    exit 2
+    for v in NCBI_USER NCBI_PASSWORD NCBI_BASE_DIR ; do
+        if [ -z "${!v}" ] ; then
+            echo "Please set $v (required when -p is used)"
+            exit 1
+        fi
+    done
 fi
 
 if [ ! "${RUN_FOLDER:0:1}" = "/" ] ; then
@@ -156,6 +161,10 @@ case "$RUNTIME" in
                               || docker pull ${IMAGE}:${TAG}
         fi
         DOCKER_ENV="-e NCBI_CONTACT=${NCBI_CONTACT}"
+        if [ $UPLOAD -eq 1 ] ; then
+            DOCKER_ENV="$DOCKER_ENV -e NCBI_USER=${NCBI_USER} -e NCBI_PASSWORD=${NCBI_PASSWORD} -e NCBI_BASE_DIR=${NCBI_BASE_DIR}"
+            [ -n "${NCBI_HOST}" ] && DOCKER_ENV="$DOCKER_ENV -e NCBI_HOST=${NCBI_HOST}"
+        fi
         EXEC="${DOCKER} run --rm -v $RUN_FOLDER:$RUN_FOLDER $DOCKER_ENV ${IMAGE}:${TAG}"
         LIB_DIR="${CONTAINER_LIB_DIR}"
         ;;
@@ -202,11 +211,23 @@ XML_CMD="${EXEC} python3 ${LIB_DIR}/sra_xml.py \
     --contact-email ${NCBI_CONTACT} \
     --log-level ${LOG_LEVEL}"
 
+UPLOAD_CMD="${EXEC} python3 ${LIB_DIR}/ncbi_upload.py \
+    --submission-xml ${SUBMISSION_XML} \
+    --sequence-dir ${RUN_FOLDER} \
+    --run-basename `basename ${RUN_FOLDER}` \
+    --log-level ${LOG_LEVEL}"
+
 if [ ${DEBUG} -eq 1 ] ; then
-    echo "STEP 1 (TSV):  $TSV_CMD"
-    echo "STEP 2 (XML):  $XML_CMD"
+    echo "STEP 1 (TSV):     $TSV_CMD"
+    echo "STEP 2 (XML):     $XML_CMD"
+    if [ $UPLOAD -eq 1 ] ; then
+        echo "STEP 3 (UPLOAD):  $UPLOAD_CMD"
+    fi
 else
     eval $TSV_CMD || { echo "TSV generation failed"; exit 1; }
     eval $XML_CMD || { echo "XML generation failed"; exit 1; }
     echo "Wrote ${SUBMISSION_XML}"
+    if [ $UPLOAD -eq 1 ] ; then
+        eval $UPLOAD_CMD || { echo "Upload to NCBI failed"; exit 1; }
+    fi
 fi
