@@ -133,14 +133,28 @@ def fastqs_to_samples(list_of_fastqs) :
     logger.info("Found %s samples" , len(samples.keys()))
     return samples
 
+def _site_field(sites, site_id, field, default="not collected"):
+    """Look up sites[site_id][field] safely; return default if missing/empty."""
+    if not site_id:
+        return default
+    entry = sites.get(site_id) if sites else None
+    if not entry:
+        return default
+    value = entry.get(field, "")
+    return value if value else default
+
+
 def make_biosample_file(header=None, data=None, constants=None, mapping=None, samples=None, sites=None, output=None) :
     logger.debug("Creating biosample file.")
 
     # assuming sample_name column is index 0
     sample_idx  = 0
     idx   = []
-    word = re.compile("\w+") 
+    word = re.compile("\w+")
     map2 = {}
+    # Per-row failure counters so a single bad row can't truncate the whole file.
+    skipped_missing_site = set()
+    rows_crashed = 0
 
     # find columns
     for i,v in enumerate(header) :
@@ -173,8 +187,6 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
         id = row[sample_idx]
         idx = 0
 
- 
-
         # fill in constants
         for i,v in enumerate(row) :
             if not v :
@@ -182,19 +194,22 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
                     row[i] = constants[header[i]]
                 else :
                     row[i] = ''
-        
-        # if not row[map2['ww_surv_system_sample_id']] :
-        #     row[map2['ww_surv_system_sample_id']] = row[map2['sample_name']]
-        # else:
-        #     logger.debug("Found existing ww_surv_system_sample_id:\t" + row[map2['ww_surv_system_sample_id']] )
 
         # talked to Sarah - always set to sample_name
         row[map2['ww_surv_system_sample_id']] = row[map2['sample_name']]
 
-        if row[0] in mapping['samples'] :
+        site_id = row[map2["collection_site_id"]] if "collection_site_id" in map2 else ""
+        if site_id and sites is not None and site_id not in sites:
+            skipped_missing_site.add(site_id)
+
+        try:
+
+          if row[0] in mapping['samples'] :
             # fill in collected_by and ww_population based on sites file
-            row[map2['collected_by']] = sites[row[map2["collection_site_id"]]]['collected_by'] if word.search(sites[row[map2["collection_site_id"]]]['collected_by']) else "not collected"
-            row[map2['ww_population']] = sites[row[map2["collection_site_id"]]]['ww_population'] if word.search(sites[row[map2["collection_site_id"]]]['ww_population']) else "not collected"
+            collected_by = _site_field(sites, site_id, 'collected_by')
+            row[map2['collected_by']] = collected_by if word.search(collected_by) else "not collected"
+            ww_population = _site_field(sites, site_id, 'ww_population')
+            row[map2['ww_population']] = ww_population if word.search(ww_population) else "not collected"
 
             # metadata from NWSS samples file
             row[map2['collection_date']] = mapping['samples'][row[0]]['sample_collect_date'] if word.search(mapping['samples'][row[0]]['sample_collect_date']) else "not collected"
@@ -234,16 +249,14 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
                 duration="not collected"
 
 
-            row[map2['ww_sample_duration']] = duration 
+            row[map2['ww_sample_duration']] = duration
 
-        else:
+          else:
             logger.error("ID %s not in mapping, probably missing from %s." , row[0] , args.samples)
-            # Set defaults
-            
-            # fill in collected_by and ww_population based on sites file
-            row[map2['collected_by']] = sites[row[map2["collection_site_id"]]]['collected_by'] if sites[row[map2["collection_site_id"]]]['collected_by'] else "not collected"
-            row[map2['ww_population']] = sites[row[map2["collection_site_id"]]]['ww_population'] if sites[row[map2["collection_site_id"]]]['ww_population'] else "not collected"            
-    
+            # Set defaults using safe site lookup
+            row[map2['collected_by']] = _site_field(sites, site_id, 'collected_by')
+            row[map2['ww_population']] = _site_field(sites, site_id, 'ww_population')
+
 
             # metadata from NWSS samples file
             row[map2['collection_date']] = "not collected"
@@ -271,13 +284,30 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
                     logger.error("Can not identify sample type from: %s. Using default: %s" , type, row[map2['ww_sample_type']])
 
 
-            row[map2['ww_sample_duration']] = duration 
+            row[map2['ww_sample_duration']] = duration
 
+        except Exception as e:
+            # Any unexpected error while filling in a single row: log, count,
+            # and continue with the row as-is (constants already applied).
+            rows_crashed += 1
+            logger.error("Failed to enrich row for sample %s: %s: %s. "
+                         "Writing row with defaults.",
+                         row[0] if row else "?", type(e).__name__, e)
 
         if fh :
             fh.write("\t".join(row) + "\n")
         else:
             print("\t".join(row))
+
+    if skipped_missing_site:
+        logger.warning("Missing site IDs (referenced in template but absent from "
+                       "SiteID.tsv): %s", sorted(skipped_missing_site))
+    if rows_crashed:
+        logger.warning("%d rows written with partial defaults due to enrichment "
+                       "errors (previously would have truncated output).",
+                       rows_crashed)
+    logger.info("Biosample file: wrote %d rows from %d template rows.",
+                len(data), len(data))
 
 
 def make_run_file(header=None, data=None, constants=None, mapping=None, samples=None, output=None) :
