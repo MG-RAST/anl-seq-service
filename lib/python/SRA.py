@@ -6,6 +6,7 @@ import re
 import glob
 
 logging.basicConfig(format='%(levelname)s %(asctime)s\t%(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # create config
@@ -202,6 +203,16 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
         if site_id and sites is not None and site_id not in sites:
             skipped_missing_site.add(site_id)
 
+        # Guarantee NCBI-required fields have a value BEFORE enrichment tries.
+        # If enrichment fails partway (KeyError / IndexError), the row still
+        # writes with these defaults instead of a partially-populated broken row.
+        REQUIRED_DEFAULTS = ('collection_date', 'ww_population',
+                             'ww_sample_type', 'ww_sample_duration',
+                             'collected_by')
+        for req in REQUIRED_DEFAULTS:
+            if req in map2 and not row[map2[req]]:
+                row[map2[req]] = "not collected"
+
         try:
 
           if row[0] in mapping['samples'] :
@@ -216,15 +227,15 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
             row[map2['collection_time']] = mapping['samples'][row[0]]['sample_collect_time'] if word.search(mapping['samples'][row[0]]['sample_collect_time']) else "not collected"
             row[map2['ww_surv_target_1_conc']] = mapping['samples'][row[0]]['pcr_target_avg_conc'] if word.search(mapping['samples'][row[0]]['pcr_target_avg_conc']) else "not collected"
 
-            # check collection data, change date format if necessary. If format is not in yyyy-mm-dd or "not collected", change to yyyy-mm-dd
-            if not re.search("\d{4}-\d{2}-\d{2}", row[map2['collection_date']]) :
-                logger.error("Date format not in yyyy-mm-dd, changing to yyyy-mm-dd.")
+            # check collection date, change date format if necessary. Target is yyyy-mm-dd.
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", row[map2['collection_date']]) :
                 # if date in format mm/dd/yyyy, change to yyyy-mm-dd
-                if re.search("\d{2}/\d{2}/\d{4}", row[map2['collection_date']]) :
-                    parts = row[map2['collection_date']].split("/")
-                    row[map2['collection_date']] = "-".join(parts[::-1])
+                if re.fullmatch(r"\d{1,2}/\d{1,2}/\d{4}", row[map2['collection_date']]) :
+                    m, d, y = row[map2['collection_date']].split("/")
+                    row[map2['collection_date']] = f"{y}-{int(m):02d}-{int(d):02d}"
                 elif row[map2['collection_date']] != "not collected" :
-                    logger.error("Date format not recognized: %s", row[map2['collection_date']])
+                    logger.error("Date format not recognized (sample %s): %s",
+                                 row[0], row[map2['collection_date']])
             
 
             ### addition mapping from reporting_jurisdiction to ww_surv_jurisdiction 
@@ -286,13 +297,15 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
 
             row[map2['ww_sample_duration']] = duration
 
-        except Exception as e:
-            # Any unexpected error while filling in a single row: log, count,
-            # and continue with the row as-is (constants already applied).
+        except (KeyError, IndexError, TypeError, ValueError) as e:
+            # Enrichment failed for this row (missing key in samples/sites,
+            # bad column count, malformed value). Row still has the required-
+            # field defaults applied above, so we write it and continue.
             rows_crashed += 1
-            logger.error("Failed to enrich row for sample %s: %s: %s. "
-                         "Writing row with defaults.",
-                         row[0] if row else "?", type(e).__name__, e)
+            exc_type = type(e).__name__
+            logger.error("Enrichment failed for sample %s: %s: %s. "
+                         "Row written with 'not collected' defaults.",
+                         row[0] if row else "?", exc_type, e)
 
         if fh :
             fh.write("\t".join(row) + "\n")
@@ -434,30 +447,39 @@ def read_samples(file):
     i2h = []
     data = []
     samples = {}
+    error = False
+    msg = ""
 
     with open(file) as f :
         h = f.readline()
         i2h = h.rstrip().split(",")
         for i,v in enumerate( i2h ) :
             header[v] = i
-            
 
         md['header'] = header
         l = 1
+        n_padded = 0
         for line in f :
             col = line.rstrip().split(",")
+            # Pad short rows to header length so downstream indexing doesn't
+            # IndexError when IDPH/CDPH CSVs have different column counts.
+            if len(col) < len(i2h) :
+                col = col + [""] * (len(i2h) - len(col))
+                n_padded += 1
             data.append( col )
 
             samples[col[0]] = {}
             for i,v in enumerate(i2h) :
                 samples[col[0]][ i2h[i] ] = col[i]
-            
-            # Cross check nr headers vs nr rows
+
+            # Flag rows with EXTRA columns beyond the header — data loss
             if len(i2h) < len(col) :
                 error = True
-                msg = "Mismatch number of columns in header row versus number of columns in data rows"
-                # logger.warning("Number of header columns does not match columns in row %i." , l) 
+                msg = f"Line {l}: {len(col)} columns > {len(i2h)} header columns; extra fields dropped"
             l += 1
+        if n_padded :
+            logger.warning("Padded %d rows to header width (samples CSV has "
+                           "narrower rows than the widest source CSV)", n_padded)
 
     md['data'] = data
     md['samples'] = samples
@@ -539,8 +561,9 @@ def command_line_options():
                     help='directory containing sequences/samples to be included in the submission file')
     parser.add_argument('--samples', dest='samples', default=None ,
                     help='sample file, contains sample metadata; probably csv')
-    parser.add_argument('--log-level', dest='level', choices=["DEBUG", "INFO" , "WARNINGS" , "ERROR"], default="INFO" ,
-                    help='sample file, contains sample metadata; probably csv')
+    parser.add_argument('--log-level', dest='level',
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO",
+                        help='logging level')
 
     args = parser.parse_args()
     logger.debug(args)
@@ -572,8 +595,6 @@ def main(args) :
 
 
 if __name__ == '__main__' :
-    logger = logging.getLogger(__name__)
-    
     args = command_line_options()
   
 

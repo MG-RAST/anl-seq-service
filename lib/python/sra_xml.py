@@ -29,18 +29,27 @@ def read_tsv(path):
 
 
 def index_by_sample_name(header, rows):
-    """Return {sample_name: {column: value}}."""
+    """Return {sample_name: {column: value}}. Raise on duplicate sample_name."""
     try:
         sn_idx = header.index("sample_name")
     except ValueError:
         raise ValueError("TSV missing 'sample_name' column")
     out = {}
+    duplicates = []
     for row in rows:
         row = list(row) + [""] * (len(header) - len(row))
         name = row[sn_idx].strip()
         if not name:
             continue
+        if name in out:
+            duplicates.append(name)
+            continue
         out[name] = dict(zip(header, row))
+    if duplicates:
+        raise ValueError(
+            f"Duplicate sample_name(s) in TSV: {sorted(set(duplicates))}. "
+            "Each sample must appear at most once."
+        )
     return out
 
 

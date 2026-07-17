@@ -88,25 +88,36 @@ if [ $UPLOAD -eq 1 ] ; then
     done
 fi
 
+if [ ! -d "${RUN_FOLDER}" ] ; then
+    echo "ERROR: Run folder not found: ${RUN_FOLDER}"
+    echo "  (did you mean /local/incoming/nextseq2k_output/nextseq2k_runs/... ?)"
+    exit 1
+fi
 if [ ! "${RUN_FOLDER:0:1}" = "/" ] ; then
-    RUN_FOLDER=`echo "$(cd "$(dirname "${RUN_FOLDER}")"; pwd)/$(basename "${RUN_FOLDER}")"`
+    RUN_FOLDER="$(cd "$(dirname "${RUN_FOLDER}")" && pwd)/$(basename "${RUN_FOLDER}")"
 fi
+# Normalize trailing slash so basename works predictably downstream.
+RUN_FOLDER="${RUN_FOLDER%/}"
 
-RUN=`find ${RUN_FOLDER} -iname "*.run.tmpl.tsv"`
-if [ -z ${RUN} ] ; then
-    RUN=`find ${RUN_FOLDER} -iname "*.sra.tmpl.tsv"`
+# Constrain template/CSV discovery to <run_folder>/SRA/ so stale snapshots
+# elsewhere in the tree can't be picked up. Quoted paths guard against spaces.
+RUN=$(find "${RUN_FOLDER}/SRA" -maxdepth 2 -iname "*.run.tmpl.tsv" 2>/dev/null)
+if [ -z "${RUN}" ] ; then
+    RUN=$(find "${RUN_FOLDER}/SRA" -maxdepth 2 -iname "*.sra.tmpl.tsv" 2>/dev/null)
 fi
-BIOSAMPLE=`find ${RUN_FOLDER} -iname "*.biosample.tmpl.tsv"`
-SITES=`find ${RUN_FOLDER} -iname "*SiteID*.tsv"`
-IDPH=`find ${RUN_FOLDER} -iname "*IDPH.csv"`
-CDPH=`find ${RUN_FOLDER} -iname "*CDPH.csv"`
+BIOSAMPLE=$(find "${RUN_FOLDER}/SRA" -maxdepth 2 -iname "*.biosample.tmpl.tsv" 2>/dev/null)
+SITES=$(find "${RUN_FOLDER}/SRA" -maxdepth 2 -iname "*SiteID*.tsv" 2>/dev/null)
+IDPH=$(find "${RUN_FOLDER}/SRA" -maxdepth 2 -iname "*IDPH.csv" 2>/dev/null)
+CDPH=$(find "${RUN_FOLDER}/SRA" -maxdepth 2 -iname "*CDPH.csv" 2>/dev/null)
 
 STOP=0
 for i in RUN BIOSAMPLE SITES IDPH CDPH ; do
-    c=`echo ${!i} | wc -w`
-    if [ ! $c -eq 1 ] ; then
+    # Count actual lines (each result on its own line from find), robust to spaces.
+    c=$(printf '%s\n' "${!i}" | grep -c .)
+    if [ "$c" -ne 1 ] ; then
         STOP=1
-        echo ERROR: Found $c files for $i: ${!i}
+        echo "ERROR: Found $c files for $i:"
+        printf '  %s\n' "${!i}"
     fi
 done
 if [ $STOP -eq 1 ] ; then
@@ -114,24 +125,38 @@ if [ $STOP -eq 1 ] ; then
 fi
 
 # Output paths
-BIOSAMPLE_FILE_PATH=`dirname $BIOSAMPLE`
-BIOSAMPLE_FILE_DEST=${BIOSAMPLE_FILE_PATH}/`basename -s .tmpl.tsv $BIOSAMPLE`.tsv
-RUN_FILE_PATH=`dirname $RUN`
-RUN_FILE_DEST=${RUN_FILE_PATH}/`basename -s .tmpl.tsv $RUN`.tsv
-SUBMISSION_XML=${RUN_FOLDER}/SRA/submission/submission.xml
+BIOSAMPLE_FILE_PATH=$(dirname "$BIOSAMPLE")
+BIOSAMPLE_FILE_DEST="${BIOSAMPLE_FILE_PATH}/$(basename -s .tmpl.tsv "$BIOSAMPLE").tsv"
+RUN_FILE_PATH=$(dirname "$RUN")
+RUN_FILE_DEST="${RUN_FILE_PATH}/$(basename -s .tmpl.tsv "$RUN").tsv"
+SUBMISSION_XML="${RUN_FOLDER}/SRA/submission/submission.xml"
 
-# Merge IDPH + CDPH samples into samples.csv consumed by SRA.py
-if [ -f ${IDPH} ] ; then
-    HEADER=`head -n 1 ${IDPH}`
-elif [ -f ${CDPH} ] ; then
-    HEADER=`head -n 1 ${CDPH}`
+# Merge IDPH + CDPH samples into samples.csv consumed by SRA.py.
+# If both files present but headers differ, use the wider one and warn — SRA.py
+# will pad short rows. This handles the IDPH-adds-days_in_sewer case.
+if [ -f "${IDPH}" ] && [ -f "${CDPH}" ] ; then
+    IDPH_NCOL=$(head -n 1 "${IDPH}" | awk -F, '{print NF}')
+    CDPH_NCOL=$(head -n 1 "${CDPH}" | awk -F, '{print NF}')
+    if [ "$IDPH_NCOL" != "$CDPH_NCOL" ] ; then
+        echo "WARNING: IDPH ($IDPH_NCOL cols) and CDPH ($CDPH_NCOL cols) headers differ; using wider one and padding."
+    fi
+    if [ "$IDPH_NCOL" -ge "$CDPH_NCOL" ] ; then
+        HEADER_SRC="${IDPH}"
+    else
+        HEADER_SRC="${CDPH}"
+    fi
 else
-    echo Missing IDPH or CDPH sample file
+    HEADER_SRC="${IDPH:-$CDPH}"
+fi
+if [ -z "${HEADER_SRC}" ] || [ ! -f "${HEADER_SRC}" ] ; then
+    echo "ERROR: Missing IDPH and CDPH sample files"
     exit 1
 fi
-echo ${HEADER} > ${RUN_FOLDER}/SRA/samples.csv
-cat $IDPH $CDPH | grep -v sample_id >> ${RUN_FOLDER}/SRA/samples.csv
-SAMPLES=${RUN_FOLDER}/SRA/samples.csv
+head -n 1 "${HEADER_SRC}" > "${RUN_FOLDER}/SRA/samples.csv"
+for f in "${IDPH}" "${CDPH}" ; do
+    [ -n "$f" ] && [ -f "$f" ] && tail -n +2 "$f" >> "${RUN_FOLDER}/SRA/samples.csv"
+done
+SAMPLES="${RUN_FOLDER}/SRA/samples.csv"
 
 DOCKER=`which docker`
 SINGULARITY=`which singularity`
