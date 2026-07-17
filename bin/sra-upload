@@ -17,13 +17,16 @@
 DEBUG=0
 UPDATE=0
 UPLOAD=0
+NO_TRIGGER=0
 LOCAL=0
 HELP=0
 IMAGE="wilke/anl-seq-service"
 TAG=latest
 LOG_LEVEL=INFO
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Resolve symlinks so invocations via /local/incoming/covid/scripts/sra-upload
+# (which symlinks here) still find the sibling lib/python correctly.
+SCRIPT_DIR=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
 HOST_LIB_DIR=$(cd "${SCRIPT_DIR}/../lib/python" && pwd)
 CONTAINER_LIB_DIR=/anl-seq-service/lib/python
 
@@ -41,6 +44,7 @@ echo "-d : Dry-run ; debugging"
 echo "-l : Run locally with system python3 (no container)"
 echo "-u : Update container image"
 echo "-p : Push package (fastqs + submission.xml + submit.ready) to NCBI submission FTP"
+echo "-T : With -p, upload everything except submit.ready (no trigger; safer first test)"
 echo ""
 echo "Required environment variables:"
 echo "  NCBI_CONTACT      Submitter contact email"
@@ -52,7 +56,7 @@ echo "  NCBI_BASE_DIR     Account folder on ftp-private.ncbi.nlm.nih.gov"
 echo "  NCBI_HOST         (Optional) Override FTP host"
 }
 
-while getopts hr:dlup option; do
+while getopts hr:dlupT option; do
     case "${option}" in
         h) HELP=1 ;;
         r) RUN_FOLDER=${OPTARG} ;;
@@ -60,6 +64,7 @@ while getopts hr:dlup option; do
         l) LOCAL=1 ;;
         u) UPDATE=1 ;;
         p) UPLOAD=1 ;;
+        T) NO_TRIGGER=1 ;;
         *) usage ; exit 1 ;;
     esac
 done
@@ -152,6 +157,15 @@ case "$RUNTIME" in
             [ ${DEBUG} -eq 1 ] && echo "singularity pull docker://${IMAGE}:${TAG}" \
                               || singularity pull docker://${IMAGE}:${TAG}
         fi
+        # Propagate secrets via SINGULARITYENV_* rather than --env <k>=<v>
+        # so values never appear in argv (ps auxww leak).
+        export SINGULARITYENV_NCBI_CONTACT="$NCBI_CONTACT"
+        if [ $UPLOAD -eq 1 ] ; then
+            export SINGULARITYENV_NCBI_USER="$NCBI_USER"
+            export SINGULARITYENV_NCBI_PASSWORD="$NCBI_PASSWORD"
+            export SINGULARITYENV_NCBI_BASE_DIR="$NCBI_BASE_DIR"
+            [ -n "${NCBI_HOST}" ] && export SINGULARITYENV_NCBI_HOST="$NCBI_HOST"
+        fi
         EXEC="singularity exec --bind $RUN_FOLDER:$RUN_FOLDER docker://${IMAGE}:${TAG}"
         LIB_DIR="${CONTAINER_LIB_DIR}"
         ;;
@@ -160,10 +174,12 @@ case "$RUNTIME" in
             [ ${DEBUG} -eq 1 ] && echo "docker pull ${IMAGE}:${TAG}" \
                               || docker pull ${IMAGE}:${TAG}
         fi
-        DOCKER_ENV="-e NCBI_CONTACT=${NCBI_CONTACT}"
+        # Bare -e <NAME> tells docker to inherit from the parent env,
+        # so secret values never land in argv (ps auxww leak).
+        DOCKER_ENV="-e NCBI_CONTACT"
         if [ $UPLOAD -eq 1 ] ; then
-            DOCKER_ENV="$DOCKER_ENV -e NCBI_USER=${NCBI_USER} -e NCBI_PASSWORD=${NCBI_PASSWORD} -e NCBI_BASE_DIR=${NCBI_BASE_DIR}"
-            [ -n "${NCBI_HOST}" ] && DOCKER_ENV="$DOCKER_ENV -e NCBI_HOST=${NCBI_HOST}"
+            DOCKER_ENV="$DOCKER_ENV -e NCBI_USER -e NCBI_PASSWORD -e NCBI_BASE_DIR"
+            [ -n "${NCBI_HOST}" ] && DOCKER_ENV="$DOCKER_ENV -e NCBI_HOST"
         fi
         EXEC="${DOCKER} run --rm -v $RUN_FOLDER:$RUN_FOLDER $DOCKER_ENV ${IMAGE}:${TAG}"
         LIB_DIR="${CONTAINER_LIB_DIR}"
@@ -216,6 +232,10 @@ UPLOAD_CMD="${EXEC} python3 ${LIB_DIR}/ncbi_upload.py \
     --sequence-dir ${RUN_FOLDER} \
     --run-basename `basename ${RUN_FOLDER}` \
     --log-level ${LOG_LEVEL}"
+
+if [ $NO_TRIGGER -eq 1 ] ; then
+    UPLOAD_CMD="${UPLOAD_CMD} --no-trigger"
+fi
 
 if [ ${DEBUG} -eq 1 ] ; then
     echo "STEP 1 (TSV):     $TSV_CMD"

@@ -1,1 +1,20 @@
 ./tmp
+
+# Credentials — never bake into an image.
+config/auth.sh
+config/*.env
+config/*.pem
+config/*.key
+auth.env
+*.pem
+*.key
+
+# Build-time noise
+.git
+.gitignore
+.dockerignore
+.claude
+*.pyc
+__pycache__
+reports/
+images/
