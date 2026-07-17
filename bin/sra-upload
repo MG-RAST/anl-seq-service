@@ -43,6 +43,22 @@ EOF
     exit 1
 fi
 
+# Preflight: refuse to run if the auth file is too permissive.
+# Group-readable at 640 is acceptable (espsf-seq is the operator group);
+# world-readable at 644+ or writable at 6[4-7][2367] is not.
+AUTH_FILE=/nfs/seq-data/anl-seq-service/config/auth.sh
+if [ -f "$AUTH_FILE" ] ; then
+    AUTH_MODE=$(stat -c "%a" "$AUTH_FILE")
+    case "$AUTH_MODE" in
+        600|640) ;;
+        *)
+            echo "ERROR: $AUTH_FILE has mode $AUTH_MODE (must be 600 or 640)." >&2
+            echo "  Run: chmod 640 $AUTH_FILE" >&2
+            exit 1
+            ;;
+    esac
+fi
+
 function usage {
 echo "Generate NCBI SRA + BioSample submission package for a run folder"
 echo --------------------------------------------------

@@ -321,6 +321,8 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
                        rows_crashed)
     logger.info("Biosample file: wrote %d rows from %d template rows.",
                 len(data), len(data))
+    if fh :
+        fh.close()
 
 
 def make_run_file(header=None, data=None, constants=None, mapping=None, samples=None, output=None) :
@@ -384,6 +386,8 @@ def make_run_file(header=None, data=None, constants=None, mapping=None, samples=
             fh.write("\t".join(row) + "\n")
         else:
             print("\t".join(row))
+    if fh :
+        fh.close()
 
 def read_template(template=None):
     """Read template file; first column sample_name"""

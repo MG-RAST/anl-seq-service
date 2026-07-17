@@ -9,7 +9,9 @@ file. Exits after upload (no report.xml polling).
 
 import argparse
 import ftplib
+import hashlib
 import io
+import json
 import logging
 import os
 import sys
@@ -60,12 +62,26 @@ def connect(host, port, user, password):
     return ftp
 
 
-def mkdir_and_cd(ftp, base_dir, folder_name):
+def mkdir_and_cd(ftp, base_dir, folder_name, run_basename):
+    """Create the timestamped upload folder. If prior folders for the same
+    run are present under base_dir, warn about them so operators can decide
+    whether to leave, delete, or investigate.
+    """
     ftp.cwd(base_dir)
+    try:
+        existing = ftp.nlst()
+    except ftplib.error_perm:
+        existing = []
+    prior = [d for d in existing
+             if d != folder_name and run_basename and run_basename in d]
+    if prior:
+        logger.warning("Prior upload folder(s) exist for %s: %s. "
+                       "New folder will still be created (fresh timestamp); "
+                       "clean up the old ones on NCBI's FTP if they are stale.",
+                       run_basename, prior)
     try:
         ftp.mkd(folder_name)
     except ftplib.error_perm as e:
-        # 550 typically means "already exists" or "permission denied"
         logger.error("Failed to create %s under %s: %s", folder_name, base_dir, e)
         raise
     ftp.cwd(folder_name)
@@ -188,7 +204,7 @@ def cli():
 
     ftp = connect(args.host, args.port, args.user, args.password)
     try:
-        mkdir_and_cd(ftp, args.base_dir, folder_name)
+        mkdir_and_cd(ftp, args.base_dir, folder_name, run_basename)
         for i, fq in enumerate(fastqs, 1):
             sz, _, ok = upload_file(
                 ftp, os.path.join(args.sequence_dir, fq),
@@ -232,6 +248,38 @@ def cli():
     else:
         status = "TRIGGERED (submit.ready sent)"
 
+    # Compute SHA256 of submission.xml for the audit trail — cheap and
+    # gives us a way to answer "what did we actually submit" months later.
+    xml_sha256 = hashlib.sha256(open(args.submission_xml, "rb").read()).hexdigest()
+
+    # Write audit trail next to the submission.xml so it's carried with
+    # the batch. Answers "what did this batch upload where and when."
+    receipt = {
+        "started_utc": started_at,
+        "duration_seconds": round(wall_dt, 1),
+        "bytes_uploaded": total_bytes,
+        "files_uploaded": n_total,
+        "avg_mbit_s": round(avg_mbps, 1),
+        "host": args.host,
+        "port": args.port,
+        "user": args.user,
+        "base_dir": args.base_dir,
+        "folder_name": folder_name,
+        "bioproject": bioproject,
+        "submission_xml_sha256": xml_sha256,
+        "submit_ready_written": (not args.no_trigger) and (not verify_failures),
+        "verify_failures": verify_failures,
+        "status": status,
+    }
+    receipt_path = os.path.join(os.path.dirname(args.submission_xml),
+                                "upload_receipt.json")
+    try:
+        with open(receipt_path, "w") as f:
+            json.dump(receipt, f, indent=2)
+        logger.info("Audit receipt: %s", receipt_path)
+    except OSError as e:
+        logger.warning("Could not write %s: %s", receipt_path, e)
+
     # End-of-run summary block — deliberately distinctive so it doesn't blend
     # into the per-file INFO stream.
     banner = "=" * 64
@@ -245,6 +293,7 @@ def cli():
     logger.info("Avg bandwidth:   %.1f Mbit/s", avg_mbps)
     logger.info("Remote folder:   %s/%s", args.base_dir.rstrip("/"), folder_name)
     logger.info("Status:          %s", status)
+    logger.info("XML SHA256:      %s", xml_sha256[:16] + "...")
     logger.info(banner)
 
 
