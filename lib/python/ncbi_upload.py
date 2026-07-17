@@ -13,6 +13,7 @@ import io
 import logging
 import os
 import sys
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
@@ -74,9 +75,14 @@ def mkdir_and_cd(ftp, base_dir, folder_name):
 def upload_file(ftp, local_path, remote_name=None):
     remote_name = remote_name or os.path.basename(local_path)
     size = os.path.getsize(local_path)
-    logger.info("Uploading %s (%d bytes)", remote_name, size)
+    t0 = time.monotonic()
     with open(local_path, "rb") as f:
         ftp.storbinary(f"STOR {remote_name}", f)
+    dt = time.monotonic() - t0
+    mbps = (size * 8 / 1e6) / dt if dt > 0 else 0.0
+    logger.info("Uploaded %s (%.1f MB in %.1fs, %.1f Mbit/s)",
+                remote_name, size / 1e6, dt, mbps)
+    return size, dt
 
 
 def upload_empty(ftp, remote_name):
@@ -105,6 +111,9 @@ def cli():
                    help=f"FTP port (default: $NCBI_PORT or {DEFAULT_PORT})")
     p.add_argument("--dry-run", action="store_true",
                    help="List what would be uploaded, do not connect")
+    p.add_argument("--no-trigger", action="store_true",
+                   help="Upload everything except submit.ready (NCBI pipeline will not pick up). "
+                        "Use to verify the upload before triggering submission.")
     p.add_argument("--log-level", default="INFO",
                    choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     args = p.parse_args()
@@ -152,20 +161,37 @@ def cli():
             logger.debug("  %s", fq)
         return
 
+    started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    wall_t0 = time.monotonic()
+    total_bytes = 0
+
     ftp = connect(args.host, args.port, args.user, args.password)
     try:
         mkdir_and_cd(ftp, args.base_dir, folder_name)
         for fq in fastqs:
-            upload_file(ftp, os.path.join(args.sequence_dir, fq), remote_name=fq)
-        upload_file(ftp, args.submission_xml, remote_name="submission.xml")
-        upload_empty(ftp, SUBMIT_READY_NAME)
+            sz, _ = upload_file(ftp, os.path.join(args.sequence_dir, fq), remote_name=fq)
+            total_bytes += sz
+        sz, _ = upload_file(ftp, args.submission_xml, remote_name="submission.xml")
+        total_bytes += sz
+        if args.no_trigger:
+            logger.warning("Skipping %s (--no-trigger). Submission NOT triggered. "
+                           "Upload it manually to start NCBI's pipeline, or delete the folder.",
+                           SUBMIT_READY_NAME)
+        else:
+            upload_empty(ftp, SUBMIT_READY_NAME)
     finally:
         try:
             ftp.quit()
         except Exception:
             ftp.close()
 
-    logger.info("Upload complete: %s/%s", args.base_dir.rstrip("/"), folder_name)
+    wall_dt = time.monotonic() - wall_t0
+    avg_mbps = (total_bytes * 8 / 1e6) / wall_dt if wall_dt > 0 else 0.0
+    suffix = " (not triggered)" if args.no_trigger else ""
+    logger.info("Upload complete%s: %s/%s",
+                suffix, args.base_dir.rstrip("/"), folder_name)
+    logger.info("Timing: started %s, total %.1fs, %.2f GB, average %.1f Mbit/s",
+                started_at, wall_dt, total_bytes / 1e9, avg_mbps)
 
 
 if __name__ == "__main__":
