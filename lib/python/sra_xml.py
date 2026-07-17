@@ -220,10 +220,10 @@ def cli():
                    help="Organization name")
     p.add_argument("--contact-email", default=os.environ.get("NCBI_CONTACT"),
                    help="Submitter contact email (defaults to $NCBI_CONTACT)")
-    p.add_argument("--contact-first", default=None,
-                   help="Submitter first name (default: from git config user.name)")
-    p.add_argument("--contact-last", default=None,
-                   help="Submitter last name (default: from git config user.name)")
+    p.add_argument("--contact-first", default=os.environ.get("NCBI_CONTACT_FIRST"),
+                   help="Submitter first name (default: $NCBI_CONTACT_FIRST or git config user.name)")
+    p.add_argument("--contact-last", default=os.environ.get("NCBI_CONTACT_LAST"),
+                   help="Submitter last name (default: $NCBI_CONTACT_LAST or git config user.name)")
     p.add_argument("--comment", default=None,
                    help="Submission comment (default: derived from run-tsv basename)")
     p.add_argument("--log-level", default="INFO",
@@ -245,8 +245,9 @@ def cli():
             args.contact_last = gl
 
     if not args.contact_first or not args.contact_last:
-        logger.error("Contact first/last required: pass --contact-first/--contact-last "
-                     "or set `git config user.name`")
+        logger.error("Contact first/last name required. Set NCBI_CONTACT_FIRST and "
+                     "NCBI_CONTACT_LAST in config/auth.sh (preferred), pass "
+                     "--contact-first/--contact-last, or set `git config user.name`.")
         sys.exit(2)
 
     if not args.comment:

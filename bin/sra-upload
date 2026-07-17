@@ -31,7 +31,15 @@ HOST_LIB_DIR=$(cd "${SCRIPT_DIR}/../lib/python" && pwd)
 CONTAINER_LIB_DIR=/anl-seq-service/lib/python
 
 if [ -z "${NCBI_CONTACT}" ] ; then
-    echo "Please set NCBI_CONTACT, e.g. export NCBI_CONTACT=you@example.org"
+    cat <<EOF >&2
+ERROR: NCBI_CONTACT is not set.
+
+Source the project auth file to populate all required env vars:
+    source /nfs/seq-data/anl-seq-service/config/auth.sh
+
+That sets NCBI_CONTACT (+ NCBI_USER, NCBI_PASSWORD, NCBI_BASE_DIR
+for -p).
+EOF
     exit 1
 fi
 
@@ -82,7 +90,12 @@ fi
 if [ $UPLOAD -eq 1 ] ; then
     for v in NCBI_USER NCBI_PASSWORD NCBI_BASE_DIR ; do
         if [ -z "${!v}" ] ; then
-            echo "Please set $v (required when -p is used)"
+            cat <<EOF >&2
+ERROR: $v is not set (required when -p is used).
+
+Source the project auth file to populate all NCBI_* vars:
+    source /nfs/seq-data/anl-seq-service/config/auth.sh
+EOF
             exit 1
         fi
     done
@@ -268,11 +281,45 @@ if [ ${DEBUG} -eq 1 ] ; then
     if [ $UPLOAD -eq 1 ] ; then
         echo "STEP 3 (UPLOAD):  $UPLOAD_CMD"
     fi
-else
-    eval $TSV_CMD || { echo "TSV generation failed"; exit 1; }
-    eval $XML_CMD || { echo "XML generation failed"; exit 1; }
-    echo "Wrote ${SUBMISSION_XML}"
-    if [ $UPLOAD -eq 1 ] ; then
-        eval $UPLOAD_CMD || { echo "Upload to NCBI failed"; exit 1; }
+    exit 0
+fi
+
+# Capture each step's stderr+stdout to a step log so we can aggregate
+# warnings at the end (WARNINGS scroll off in a long upload).
+STEP_LOG=$(mktemp)
+trap 'rm -f "$STEP_LOG"' EXIT
+
+echo "[1/3] Generating TSVs..."
+eval $TSV_CMD 2>&1 | tee -a "$STEP_LOG"
+TSV_STATUS=${PIPESTATUS[0]}
+[ $TSV_STATUS -ne 0 ] && { echo "TSV generation failed (exit $TSV_STATUS)"; exit $TSV_STATUS; }
+
+echo "[2/3] Generating submission.xml..."
+eval $XML_CMD 2>&1 | tee -a "$STEP_LOG"
+XML_STATUS=${PIPESTATUS[0]}
+[ $XML_STATUS -ne 0 ] && { echo "XML generation failed (exit $XML_STATUS)"; exit $XML_STATUS; }
+echo "Wrote ${SUBMISSION_XML}"
+
+if [ $UPLOAD -eq 1 ] ; then
+    echo "[3/3] Uploading to NCBI..."
+    eval $UPLOAD_CMD 2>&1 | tee -a "$STEP_LOG"
+    UPLOAD_STATUS=${PIPESTATUS[0]}
+    [ $UPLOAD_STATUS -ne 0 ] && { echo "Upload to NCBI failed (exit $UPLOAD_STATUS)"; exit $UPLOAD_STATUS; }
+fi
+
+# Aggregate warnings from all steps so operators see them even after
+# the per-file upload stream scrolls the earlier ones off.
+WARN_COUNT=$(grep -c "^WARNING" "$STEP_LOG" 2>/dev/null || echo 0)
+ERR_COUNT=$(grep -c "^ERROR" "$STEP_LOG" 2>/dev/null || echo 0)
+if [ "$WARN_COUNT" -gt 0 ] || [ "$ERR_COUNT" -gt 0 ] ; then
+    echo
+    echo "================================================================"
+    echo "WARNINGS AND ERRORS DURING THIS RUN"
+    echo "  $WARN_COUNT WARNING(s), $ERR_COUNT ERROR(s)"
+    echo "================================================================"
+    grep -E "^(WARNING|ERROR)" "$STEP_LOG" | head -40
+    if [ $(grep -E "^(WARNING|ERROR)" "$STEP_LOG" | wc -l) -gt 40 ] ; then
+        echo "... (more; full log lines above)"
     fi
+    echo "================================================================"
 fi

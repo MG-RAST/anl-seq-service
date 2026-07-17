@@ -5,6 +5,8 @@
 # The other three are required when -p (FTP upload) is added.
 #
 # export NCBI_CONTACT=you@example.org
+# export NCBI_CONTACT_FIRST=Firstname
+# export NCBI_CONTACT_LAST=Lastname
 # export NCBI_USER=
 # export NCBI_PASSWORD=
 # export NCBI_BASE_DIR=/submit/Test/

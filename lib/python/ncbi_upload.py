@@ -72,7 +72,11 @@ def mkdir_and_cd(ftp, base_dir, folder_name):
     logger.info("Created and entered %s/%s", base_dir.rstrip("/"), folder_name)
 
 
-def upload_file(ftp, local_path, remote_name=None):
+def upload_file(ftp, local_path, remote_name=None, progress=""):
+    """Upload one file. Verifies remote SIZE matches local afterwards.
+
+    Returns (size, duration_seconds, verified: bool).
+    """
     remote_name = remote_name or os.path.basename(local_path)
     size = os.path.getsize(local_path)
     t0 = time.monotonic()
@@ -80,9 +84,24 @@ def upload_file(ftp, local_path, remote_name=None):
         ftp.storbinary(f"STOR {remote_name}", f)
     dt = time.monotonic() - t0
     mbps = (size * 8 / 1e6) / dt if dt > 0 else 0.0
-    logger.info("Uploaded %s (%.1f MB in %.1fs, %.1f Mbit/s)",
-                remote_name, size / 1e6, dt, mbps)
-    return size, dt
+
+    # Post-upload integrity: server-reported size must equal local size.
+    # If SIZE isn't supported (rare on modern FTP), skip silently.
+    verified = True
+    try:
+        remote_size = ftp.size(remote_name)
+        if remote_size is not None and remote_size != size:
+            logger.error("SIZE mismatch on %s: local %d, remote %d — "
+                         "upload corrupted, folder should be discarded.",
+                         remote_name, size, remote_size)
+            verified = False
+    except Exception as e:
+        logger.debug("Could not verify SIZE for %s: %s", remote_name, e)
+
+    verify_tag = "" if verified else " [SIZE MISMATCH!]"
+    logger.info("%sUploaded %s (%.1f MB in %.1fs, %.1f Mbit/s)%s",
+                progress, remote_name, size / 1e6, dt, mbps, verify_tag)
+    return size, dt, verified
 
 
 def upload_empty(ftp, remote_name):
@@ -164,19 +183,38 @@ def cli():
     started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     wall_t0 = time.monotonic()
     total_bytes = 0
+    n_total = len(fastqs) + 1  # + submission.xml
+    verify_failures = []
 
     ftp = connect(args.host, args.port, args.user, args.password)
     try:
         mkdir_and_cd(ftp, args.base_dir, folder_name)
-        for fq in fastqs:
-            sz, _ = upload_file(ftp, os.path.join(args.sequence_dir, fq), remote_name=fq)
+        for i, fq in enumerate(fastqs, 1):
+            sz, _, ok = upload_file(
+                ftp, os.path.join(args.sequence_dir, fq),
+                remote_name=fq,
+                progress=f"[{i}/{n_total}] ",
+            )
             total_bytes += sz
-        sz, _ = upload_file(ftp, args.submission_xml, remote_name="submission.xml")
+            if not ok:
+                verify_failures.append(fq)
+        sz, _, ok = upload_file(
+            ftp, args.submission_xml, remote_name="submission.xml",
+            progress=f"[{n_total}/{n_total}] ",
+        )
         total_bytes += sz
-        if args.no_trigger:
+        if not ok:
+            verify_failures.append("submission.xml")
+
+        if verify_failures:
+            logger.error("REFUSING to write submit.ready — %d file(s) failed "
+                         "SIZE verification: %s. Investigate and re-upload "
+                         "before triggering.",
+                         len(verify_failures), verify_failures[:5])
+        elif args.no_trigger:
             logger.warning("Skipping %s (--no-trigger). Submission NOT triggered. "
-                           "Upload it manually to start NCBI's pipeline, or delete the folder.",
-                           SUBMIT_READY_NAME)
+                           "Upload it manually to start NCBI's pipeline, or delete "
+                           "the folder.", SUBMIT_READY_NAME)
         else:
             upload_empty(ftp, SUBMIT_READY_NAME)
     finally:
@@ -187,11 +225,27 @@ def cli():
 
     wall_dt = time.monotonic() - wall_t0
     avg_mbps = (total_bytes * 8 / 1e6) / wall_dt if wall_dt > 0 else 0.0
-    suffix = " (not triggered)" if args.no_trigger else ""
-    logger.info("Upload complete%s: %s/%s",
-                suffix, args.base_dir.rstrip("/"), folder_name)
-    logger.info("Timing: started %s, total %.1fs, %.2f GB, average %.1f Mbit/s",
-                started_at, wall_dt, total_bytes / 1e9, avg_mbps)
+    if verify_failures:
+        status = f"UPLOAD INCOMPLETE ({len(verify_failures)} SIZE mismatch — not triggered)"
+    elif args.no_trigger:
+        status = "STAGED (not triggered)"
+    else:
+        status = "TRIGGERED (submit.ready sent)"
+
+    # End-of-run summary block — deliberately distinctive so it doesn't blend
+    # into the per-file INFO stream.
+    banner = "=" * 64
+    logger.info("")
+    logger.info(banner)
+    logger.info("SUBMISSION SUMMARY")
+    logger.info(banner)
+    logger.info("Started (UTC):   %s", started_at)
+    logger.info("Duration:        %.1f s (%.1f min)", wall_dt, wall_dt / 60)
+    logger.info("Data:            %.2f GB, %d files", total_bytes / 1e9, n_total)
+    logger.info("Avg bandwidth:   %.1f Mbit/s", avg_mbps)
+    logger.info("Remote folder:   %s/%s", args.base_dir.rstrip("/"), folder_name)
+    logger.info("Status:          %s", status)
+    logger.info(banner)
 
 
 if __name__ == "__main__":
