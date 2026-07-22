@@ -132,8 +132,36 @@ The wrapper also emits a WARNING at start of upload if it finds a prior folder f
 | `ERROR Date format not recognized: <val>` | Date is neither `yyyy-mm-dd` nor `mm/dd/yyyy` | Fix the NWSS CSV date column and re-run |
 | `WARNING: IDPH (54 cols) and CDPH (53 cols) headers differ` | IDPH-only `days_in_sewer` column | Non-fatal; wrapper uses the wider header + pads |
 
+## Timing baselines (Illinois_WBE center account, verified 2026-07-22)
+
+Measured end-to-end for the 240612 batch (71 samples, 143 files, 11.56 GB):
+
+| Phase | Duration | Notes |
+|---|---|---|
+| Upload (FTP) | 136 s (2m 16s) | 679 Mbit/s average |
+| NCBI ingest → first `report.xml` | ~3–4 min | Test folder |
+| NCBI processing → accessions (Production) | ~15–30 min | based on typical NCBI SLA; not yet measured |
+
+## Test-folder gotcha
+
+**`/submit/Test/` does NOT have access to production BioProject records.** A Test submission referencing PRJNA989260 will get through the upload cleanly, pass schema validation, then fail during processing with:
+
+```
+error_code="63" severity="error-stop"
+BioProject accession PRJNA989260 does not exist. Please provide a valid BioProject accession.
+```
+
+This is **expected Test-folder behavior**, not a real problem with your account or XML. It means the upload + schema validation half of the pipeline works.
+
+Options for confirming end-to-end:
+1. **Trust the test.** Upload validated, schema validated. Submit next batch straight to `/submit/Production/`.
+2. **Ask NCBI helpdesk** for a Test-only BioProject accession to reference for future Test runs.
+
+Real accessions (`SAMN########`, `SRR########`) only get issued on `/submit/Production/`.
+
 ## Post-migration reference
 
 - Old CDC-flavored script preserved at `/local/incoming/covid/scripts/sra-upload.cdc-legacy` (chmod 600). Do not use; it targets `eft.cdc.gov` which is no longer the canonical endpoint.
 - Git tag `v1.0-cdc-nwss` on the `anl-seq-service` repo is the last CDC-era code state.
 - Current CDC-to-NCBI transition summary: `reports/work-260714.sra-submission-audit.md`.
+- First Test submission (SUB1137596) evidence: `reports/sra-audit-260714/first-test-submission-SUB1137596/`.
