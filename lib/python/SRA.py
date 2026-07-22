@@ -69,17 +69,25 @@ def read_site_ID(file) :
         header = {}
         with open(file) as f:
 
-            l = f.readline().rstrip() 
+            l = f.readline().rstrip()
             h = map( lambda x : x.lstrip("*") , l.split("\t"))
             for i,v in enumerate(h):
                 header[i] = v
 
-            for line in f:
-                parts = line.rstrip().split("\t")
-                sites[parts[0]] = { 
-                                    header[1]   : parts[1] ,
-                                    header[2]   : parts[2]
-                                   }
+            for lineno, line in enumerate(f, 2):
+                # rstrip("\r\n") preserves trailing empty fields; rstrip()
+                # without args drops them (S0188 case: empty ww_population
+                # becomes 2-element row and IndexError'd on parts[2]).
+                parts = line.rstrip("\r\n").split("\t")
+                if not parts or not parts[0]:
+                    continue
+                # Pad row to header width so short rows don't IndexError.
+                if len(parts) < len(header):
+                    parts = parts + [""] * (len(header) - len(parts))
+                sites[parts[0]] = {
+                    header[1] : parts[1] ,
+                    header[2] : parts[2] ,
+                }
     else:
         logger.error("No SiteID file:\t" + str(file))
 
