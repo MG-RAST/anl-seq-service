@@ -20,6 +20,8 @@ UPLOAD=0
 NO_TRIGGER=0
 LOCAL=0
 HELP=0
+SKIP_LIST=""
+SKIP_PUBLISHED=0
 IMAGE="wilke/anl-seq-service"
 TAG=latest
 LOG_LEVEL=INFO
@@ -69,6 +71,8 @@ echo "-l : Run locally with system python3 (no container)"
 echo "-u : Update container image"
 echo "-p : Push package (fastqs + submission.xml + submit.ready) to NCBI submission FTP"
 echo "-T : With -p, upload everything except submit.ready (no trigger; safer first test)"
+echo "-s <file> : Skip sample IDs listed in <file> (from check-published-samples or plain list)"
+echo "-S : Auto-generate skip list via check-published-samples before generating TSVs"
 echo ""
 echo "Required environment variables:"
 echo "  NCBI_CONTACT      Submitter contact email"
@@ -80,7 +84,7 @@ echo "  NCBI_BASE_DIR     Account folder on ftp-private.ncbi.nlm.nih.gov"
 echo "  NCBI_HOST         (Optional) Override FTP host"
 }
 
-while getopts hr:dlupT option; do
+while getopts hr:dlupTs:S option; do
     case "${option}" in
         h) HELP=1 ;;
         r) RUN_FOLDER=${OPTARG} ;;
@@ -89,9 +93,16 @@ while getopts hr:dlupT option; do
         u) UPDATE=1 ;;
         p) UPLOAD=1 ;;
         T) NO_TRIGGER=1 ;;
+        s) SKIP_LIST=${OPTARG} ;;
+        S) SKIP_PUBLISHED=1 ;;
         *) usage ; exit 1 ;;
     esac
 done
+
+if [ -n "$SKIP_LIST" ] && [ $SKIP_PUBLISHED -eq 1 ] ; then
+    echo "ERROR: -s <file> and -S are mutually exclusive." >&2
+    exit 1
+fi
 
 if [ $HELP -eq 1 ] ; then
     usage
@@ -264,6 +275,24 @@ if [ ${DEBUG} -eq 1 ] ; then
     echo
 fi
 
+# Build the check-published-samples call for -S (auto-generate skip list).
+CHECK_PUBLISHED_CMD=""
+if [ $SKIP_PUBLISHED -eq 1 ] ; then
+    SKIP_LIST="${RUN_FOLDER}/SRA/published.tsv"
+    # The check runs locally on the host; the check-published-samples script
+    # itself is portable stdlib and doesn't need the container.
+    CHECK_PUBLISHED_CMD="${SCRIPT_DIR}/check-published-samples \
+        -r ${RUN_FOLDER} \
+        -o ${SKIP_LIST} \
+        --log-level ${LOG_LEVEL}"
+fi
+
+# Add --skip-samples to SRA.py invocation if either -s or -S is active.
+SKIP_ARG=""
+if [ -n "$SKIP_LIST" ] ; then
+    SKIP_ARG="--skip-samples ${SKIP_LIST}"
+fi
+
 TSV_CMD="${EXEC} python3 ${LIB_DIR}/SRA.py \
     --run-template ${RUN} \
     --run-output ${RUN_FILE_DEST} \
@@ -272,6 +301,7 @@ TSV_CMD="${EXEC} python3 ${LIB_DIR}/SRA.py \
     --sites ${SITES} \
     --samples ${SAMPLES} \
     --sequence-dir ${RUN_FOLDER} \
+    ${SKIP_ARG} \
     --log-level ${LOG_LEVEL}"
 
 XML_CMD="${EXEC} python3 ${LIB_DIR}/sra_xml.py \
@@ -292,6 +322,9 @@ if [ $NO_TRIGGER -eq 1 ] ; then
 fi
 
 if [ ${DEBUG} -eq 1 ] ; then
+    if [ -n "$CHECK_PUBLISHED_CMD" ] ; then
+        echo "STEP 0 (CHECK):   $CHECK_PUBLISHED_CMD"
+    fi
     echo "STEP 1 (TSV):     $TSV_CMD"
     echo "STEP 2 (XML):     $XML_CMD"
     if [ $UPLOAD -eq 1 ] ; then
@@ -304,6 +337,13 @@ fi
 # warnings at the end (WARNINGS scroll off in a long upload).
 STEP_LOG=$(mktemp)
 trap 'rm -f "$STEP_LOG"' EXIT
+
+if [ -n "$CHECK_PUBLISHED_CMD" ] ; then
+    echo "[0/3] Checking which samples are already published..."
+    eval $CHECK_PUBLISHED_CMD 2>&1 | tee -a "$STEP_LOG"
+    CHECK_STATUS=${PIPESTATUS[0]}
+    [ $CHECK_STATUS -ne 0 ] && { echo "check-published-samples failed (exit $CHECK_STATUS)"; exit $CHECK_STATUS; }
+fi
 
 echo "[1/3] Generating TSVs..."
 eval $TSV_CMD 2>&1 | tee -a "$STEP_LOG"
@@ -325,6 +365,15 @@ fi
 
 # Aggregate warnings from all steps so operators see them even after
 # the per-file upload stream scrolls the earlier ones off.
+# Surface the skip-list summary distinctly (it's a design decision, not an error).
+if [ -n "$SKIP_LIST" ] ; then
+    SKIPPED_N=$(grep -oE "Skipped [0-9]+ of [0-9]+ template rows" "$STEP_LOG" | head -1 | awk '{print $2}')
+    if [ -n "$SKIPPED_N" ] ; then
+        echo
+        echo "Filtered: $SKIPPED_N sample(s) skipped via ${SKIP_LIST}"
+    fi
+fi
+
 WARN_COUNT=$(grep -c "^WARNING" "$STEP_LOG" 2>/dev/null || echo 0)
 ERR_COUNT=$(grep -c "^ERROR" "$STEP_LOG" 2>/dev/null || echo 0)
 if [ "$WARN_COUNT" -gt 0 ] || [ "$ERR_COUNT" -gt 0 ] ; then

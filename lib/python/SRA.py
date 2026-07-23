@@ -9,6 +9,55 @@ logging.basicConfig(format='%(levelname)s %(asctime)s\t%(message)s', level=loggi
 logger = logging.getLogger(__name__)
 
 
+def _load_skip_set(path):
+    """Load a set of sample IDs to skip.
+
+    Accepts two formats:
+      1. Plain list: one sample_id per line, '#' comments, blanks OK.
+      2. TSV with a header row containing 'sample_id' (and optionally 'status').
+         If 'status' is present, only rows with status == 'published' are skipped.
+         Matches the output of bin/check-published-samples.
+
+    Returns an empty set for path == None or a missing file (with a warning).
+    """
+    if not path:
+        return set()
+    if not os.path.isfile(path):
+        logger.warning("--skip-samples file not found: %s (proceeding with empty skip set)", path)
+        return set()
+
+    with open(path) as f:
+        peek = f.readline()
+        # TSV format if the first line has a tab and mentions sample_id
+        if "\t" in peek and "sample_id" in peek.lower():
+            f.seek(0)
+            import csv as _csv
+            reader = _csv.DictReader(f, delimiter="\t")
+            headers_lc = [h.lower() for h in (reader.fieldnames or [])]
+            has_status = "status" in headers_lc
+            skip = set()
+            for row in reader:
+                sid = (row.get("sample_id") or "").strip()
+                if not sid:
+                    continue
+                if has_status and (row.get("status") or "").strip().lower() != "published":
+                    continue
+                skip.add(sid)
+            logger.info("Loaded %d sample IDs from %s (TSV, status-filtered=%s)",
+                        len(skip), path, has_status)
+            return skip
+
+        # Plain list format
+        f.seek(0)
+        skip = set()
+        for line in f:
+            s = line.split("#", 1)[0].strip()
+            if s:
+                skip.add(s)
+        logger.info("Loaded %d sample IDs from %s (plain list)", len(skip), path)
+        return skip
+
+
 # create config
 def init( options : None) :
     """Create initial config"""
@@ -153,7 +202,7 @@ def _site_field(sites, site_id, field, default="not collected"):
     return value if value else default
 
 
-def make_biosample_file(header=None, data=None, constants=None, mapping=None, samples=None, sites=None, output=None) :
+def make_biosample_file(header=None, data=None, constants=None, mapping=None, samples=None, sites=None, output=None, skip_set=None) :
     logger.debug("Creating biosample file.")
 
     # assuming sample_name column is index 0
@@ -164,6 +213,8 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
     # Per-row failure counters so a single bad row can't truncate the whole file.
     skipped_missing_site = set()
     rows_crashed = 0
+    rows_skipped = 0
+    skip_set = skip_set or set()
 
     # find columns
     for i,v in enumerate(header) :
@@ -194,6 +245,14 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
             row.append('')
 
         id = row[sample_idx]
+
+        # Skip samples that are already published under this BioProject.
+        # Constants (first data row) still populated by read_template()'s constants
+        # dict so downstream rows using them are unaffected.
+        if id and id in skip_set :
+            rows_skipped += 1
+            continue
+
         idx = 0
 
         # fill in constants
@@ -327,18 +386,23 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
         logger.warning("%d rows written with partial defaults due to enrichment "
                        "errors (previously would have truncated output).",
                        rows_crashed)
+    if rows_skipped:
+        logger.info("Skipped %d of %d template rows because they are already "
+                    "published (see --skip-samples).", rows_skipped, len(data))
     logger.info("Biosample file: wrote %d rows from %d template rows.",
-                len(data), len(data))
+                len(data) - rows_skipped, len(data))
     if fh :
         fh.close()
 
 
-def make_run_file(header=None, data=None, constants=None, mapping=None, samples=None, output=None) :
+def make_run_file(header=None, data=None, constants=None, mapping=None, samples=None, output=None, skip_set=None) :
     logger.debug("Creating run file.")
 
     # assuming sample_name column is index 0
     sample_idx  = 0
     files_idx   = []
+    rows_skipped = 0
+    skip_set = skip_set or set()
 
     for i,v in enumerate(header) :
         if re.search("filename", v) :
@@ -365,6 +429,12 @@ def make_run_file(header=None, data=None, constants=None, mapping=None, samples=
             row.append('')
 
         id = row[sample_idx]
+
+        # Skip samples already published under this BioProject.
+        if id and id in skip_set :
+            rows_skipped += 1
+            continue
+
         idx = 0
 
         # add sequence files
@@ -394,6 +464,11 @@ def make_run_file(header=None, data=None, constants=None, mapping=None, samples=
             fh.write("\t".join(row) + "\n")
         else:
             print("\t".join(row))
+    if rows_skipped:
+        logger.info("Skipped %d of %d run rows because they are already "
+                    "published (see --skip-samples).", rows_skipped, len(data))
+    logger.info("Run file: wrote %d rows from %d template rows.",
+                len(data) - rows_skipped, len(data))
     if fh :
         fh.close()
 
@@ -573,6 +648,11 @@ def command_line_options():
                     help='directory containing sequences/samples to be included in the submission file')
     parser.add_argument('--samples', dest='samples', default=None ,
                     help='sample file, contains sample metadata; probably csv')
+    parser.add_argument('--skip-samples', dest='skip_samples', default=None,
+                    help='Path to a file listing sample IDs to skip (already-published). '
+                         'Plain list (one id per line, "#" comments) or TSV with '
+                         'sample_id + optional status column (only status==published skipped). '
+                         'Compatible with bin/check-published-samples output.')
     parser.add_argument('--log-level', dest='level',
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO",
                         help='logging level')
@@ -582,11 +662,9 @@ def command_line_options():
     return args
 
 def main(args) :
-    # logger.debug("Debug")
-    # logger.info("Info")
-
     logger.setLevel(args.level)
 
+    skip_set = _load_skip_set(getattr(args, "skip_samples", None))
 
     if args.samples :
         metadata = read_samples(args.samples)
@@ -595,12 +673,15 @@ def main(args) :
         fastq = read_sequence_dir(args.dir)
         samples = fastqs_to_samples(fastq)
         (header, data, const) = read_template(template=args.run_template)
-        make_run_file(header=header, data=data, constants=const, samples=samples, mapping=None , output=args.run_output)
+        make_run_file(header=header, data=data, constants=const, samples=samples,
+                      mapping=None, output=args.run_output, skip_set=skip_set)
 
     if args.biosample_template :
         sites = read_site_ID(args.sites)
         (header, data, const) = read_template(template=args.biosample_template)
-        make_biosample_file(header=header, data=data, constants=const,  mapping=metadata , output=args.biosample_output , sites=sites)
+        make_biosample_file(header=header, data=data, constants=const,
+                            mapping=metadata, output=args.biosample_output,
+                            sites=sites, skip_set=skip_set)
 
 
     

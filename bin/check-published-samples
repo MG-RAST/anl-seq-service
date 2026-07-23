@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""Check which samples of a run are already published under a BioProject.
+
+Fetches the runinfo for the given BioProject (default PRJNA989260) from
+NCBI eutils and joins it against the sample IDs found in the run folder's
+biosample template. Emits a per-sample status TSV that `sra-upload
+--skip-list <file>` and `SRA.py --skip-samples <file>` can consume.
+
+A short-lived cache (default 24h) avoids hitting eutils on every batch.
+
+Output TSV columns:
+    sample_id  status  biosample_accession  run_accession  load_date
+
+where status is 'published' if the sample has a real SRR accession under
+the BioProject, or 'missing' otherwise.
+"""
+
+import argparse
+import csv
+import glob
+import io
+import logging
+import os
+import re
+import sys
+import time
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
+
+EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+CACHE_TTL_SECONDS = 24 * 3600
+CHUNK = 2000
+USER_AGENT = "anl-seq-service/check-published-samples/1.0"
+
+# NCBI's runinfo response omits the header when fetched via WebEnv pagination.
+# This is the canonical db=sra runinfo column order (as of 2026-07); we prepend
+# it so csv.DictReader keys work.
+RUNINFO_HEADER = [
+    "Run", "ReleaseDate", "LoadDate", "spots", "bases", "spots_with_mates",
+    "avgLength", "size_MB", "AssemblyName", "download_path", "Experiment",
+    "LibraryName", "LibraryStrategy", "LibrarySelection", "LibrarySource",
+    "LibraryLayout", "InsertSize", "InsertDev", "Platform", "Model",
+    "SRAStudy", "BioProject", "Study_Pubmed_id", "ProjectID", "Sample",
+    "BioSample", "SampleType", "TaxID", "ScientificName", "SampleName",
+    "g1k_pop_code", "source", "g1k_analysis_group", "Subject_ID", "Sex",
+    "Disease", "Tumor", "Affection_Status", "Analyte_Type",
+    "Histological_Type", "Body_Site", "CenterName", "Submission",
+    "dbgap_study_accession", "Consent", "RunHash", "ReadHash",
+]
+
+
+def _http_get(url, timeout=180):
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", errors="replace")
+
+
+def _esearch_history(bioproject):
+    """Return (webenv, query_key, count) using esearch history."""
+    params = {
+        "db": "sra",
+        "term": f"{bioproject}[BioProject]",
+        "usehistory": "y",
+        "retmax": 0,
+    }
+    url = f"{EUTILS}/esearch.fcgi?{urllib.parse.urlencode(params)}"
+    xml = _http_get(url, timeout=60)
+    webenv = re.search(r"<WebEnv>([^<]+)</WebEnv>", xml)
+    qkey = re.search(r"<QueryKey>(\d+)</QueryKey>", xml)
+    cnt = re.search(r"<Count>(\d+)</Count>", xml)
+    if not (webenv and qkey and cnt):
+        raise RuntimeError(f"Could not parse esearch response for {bioproject}")
+    return webenv.group(1), qkey.group(1), int(cnt.group(1))
+
+
+def _efetch_runinfo(webenv, query_key, retstart, retmax):
+    params = {
+        "db": "sra",
+        "query_key": query_key,
+        "WebEnv": webenv,
+        "rettype": "runinfo",
+        "retmode": "csv",
+        "retstart": retstart,
+        "retmax": retmax,
+    }
+    url = f"{EUTILS}/efetch.fcgi?{urllib.parse.urlencode(params)}"
+    return _http_get(url, timeout=180)
+
+
+def fetch_ncbi_runinfo(bioproject):
+    """Bulk-fetch runinfo for a BioProject; return list[dict] keyed by column name."""
+    webenv, qkey, total = _esearch_history(bioproject)
+    logger.info("BioProject %s has %d SRA records at NCBI", bioproject, total)
+
+    all_rows = []
+    for retstart in range(0, total, CHUNK):
+        logger.info("Fetching runinfo %d..%d/%d",
+                    retstart, min(retstart + CHUNK, total), total)
+        csv_text = _efetch_runinfo(webenv, qkey, retstart, CHUNK)
+        reader = csv.reader(io.StringIO(csv_text))
+        for row in reader:
+            if not row or not any(c.strip() for c in row):
+                continue
+            # Skip a row that happens to look like the header (defensive).
+            if row[0] == "Run" and row[1] == "ReleaseDate":
+                continue
+            all_rows.append(dict(zip(RUNINFO_HEADER, row)))
+        time.sleep(0.34)  # <=3 req/s without API key
+    return all_rows
+
+
+def cache_path(cache_dir, bioproject):
+    return os.path.join(cache_dir, f"ncbi_{bioproject}_samples.tsv")
+
+
+def load_cache(path):
+    """Return a dict {sample_name: row_dict} from a cached TSV, or None if unusable."""
+    if not os.path.isfile(path):
+        return None
+    with open(path) as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        rows = list(reader)
+    return {r["sample_name"]: r for r in rows if r.get("sample_name")}
+
+
+def save_cache(path, rows_by_name):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        w = csv.writer(f, delimiter="\t")
+        w.writerow(["sample_name", "biosample_accession", "run_accession",
+                    "library_name", "release_date", "load_date"])
+        for name in sorted(rows_by_name):
+            r = rows_by_name[name]
+            w.writerow([name, r.get("BioSample", ""), r.get("Run", ""),
+                        r.get("LibraryName", ""), r.get("ReleaseDate", ""),
+                        r.get("LoadDate", "")])
+
+
+def load_or_refresh(bioproject, cache_dir, refresh):
+    """Return {sample_name: row_dict} for the BioProject. Uses cache when fresh."""
+    path = cache_path(cache_dir, bioproject)
+    if not refresh and os.path.isfile(path):
+        age = time.time() - os.path.getmtime(path)
+        if age < CACHE_TTL_SECONDS:
+            logger.info("Using cached NCBI TSV: %s (%.1f h old)",
+                        path, age / 3600)
+            return load_cache(path)
+        logger.info("Cached NCBI TSV is %.1f h old (>%dh); refetching",
+                    age / 3600, CACHE_TTL_SECONDS // 3600)
+    rows = fetch_ncbi_runinfo(bioproject)
+    by_name = {}
+    for r in rows:
+        name = r.get("SampleName", "").strip()
+        if not name:
+            continue
+        # Prefer the row that has a real Run accession if multiple exist.
+        existing = by_name.get(name)
+        if not existing or (not existing.get("Run") and r.get("Run")):
+            by_name[name] = r
+    save_cache(path, by_name)
+    logger.info("Cached %d unique sample_names to %s", len(by_name), path)
+    return load_cache(path)
+
+
+def discover_sample_ids(run_folder):
+    """Return sorted list of sample IDs (str) declared for a batch."""
+    # Prefer the biosample template (authoritative for what would be submitted).
+    tmpl = glob.glob(os.path.join(run_folder, "SRA", "*.[Bb]iosample.tmpl.tsv"))
+    if tmpl:
+        return _ids_from_template(tmpl[0])
+    # Fallback: sample-mapping.tsv at the batch root.
+    sm = glob.glob(os.path.join(run_folder, "*sample-mapping.tsv"))
+    if sm:
+        return _ids_from_sample_mapping(sm[0])
+    raise FileNotFoundError(
+        f"No biosample template under {run_folder}/SRA/ and no "
+        f"*sample-mapping.tsv at {run_folder} — cannot determine sample IDs."
+    )
+
+
+def _ids_from_template(path):
+    ids = []
+    with open(path) as f:
+        reader = csv.reader(f, delimiter="\t")
+        for i, row in enumerate(reader):
+            if i == 0:
+                continue  # header
+            if not row:
+                continue
+            sid = row[0].strip().lstrip("*")
+            if sid and re.fullmatch(r"\d+", sid):
+                ids.append(sid)
+    return sorted(set(ids))
+
+
+def _ids_from_sample_mapping(path):
+    ids = []
+    with open(path) as f:
+        for line in f:
+            parts = line.rstrip("\r\n").split("\t")
+            if not parts:
+                continue
+            sid = parts[0].strip()
+            if sid and re.fullmatch(r"\d+", sid):
+                ids.append(sid)
+    return sorted(set(ids))
+
+
+def emit_status_tsv(out_path, local_ids, ncbi):
+    """Write per-sample status TSV. Returns (published_count, missing_count)."""
+    published = 0
+    missing = 0
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    with open(out_path, "w") as f:
+        w = csv.writer(f, delimiter="\t")
+        w.writerow(["sample_id", "status", "biosample_accession",
+                    "run_accession", "load_date"])
+        for sid in local_ids:
+            row = ncbi.get(sid)
+            run_acc = (row or {}).get("run_accession", "")
+            if row and run_acc:
+                w.writerow([sid, "published",
+                            row.get("biosample_accession", ""),
+                            run_acc,
+                            row.get("load_date", "")])
+                published += 1
+            else:
+                w.writerow([sid, "missing", "", "", ""])
+                missing += 1
+    return published, missing
+
+
+def cli():
+    p = argparse.ArgumentParser(
+        description="Emit per-sample published/missing status for a run against a BioProject")
+    p.add_argument("-r", "--run-folder", required=True,
+                   help="Batch run folder containing SRA/ with biosample template")
+    p.add_argument("-b", "--bioproject", default="PRJNA989260",
+                   help="Target NCBI BioProject accession (default: PRJNA989260)")
+    p.add_argument("-o", "--output", default=None,
+                   help="Output TSV path (default: <run_folder>/SRA/published.tsv)")
+    p.add_argument("--refresh", action="store_true",
+                   help="Force re-fetch from NCBI even if cache is fresh")
+    p.add_argument("--cache", default=os.path.join(
+        os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+        "anl-seq-service"),
+        help="Cache directory (default: $XDG_CACHE_HOME/anl-seq-service)")
+    p.add_argument("--log-level", default="INFO",
+                   choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    args = p.parse_args()
+
+    logging.basicConfig(format="%(levelname)s %(asctime)s\t%(message)s",
+                        level=args.log_level)
+
+    run_folder = os.path.abspath(args.run_folder.rstrip("/"))
+    if not os.path.isdir(run_folder):
+        logger.error("Not a directory: %s", run_folder)
+        sys.exit(1)
+
+    out = args.output or os.path.join(run_folder, "SRA", "published.tsv")
+
+    try:
+        local_ids = discover_sample_ids(run_folder)
+    except FileNotFoundError as e:
+        logger.error("%s", e)
+        sys.exit(1)
+    logger.info("Batch %s has %d unique sample IDs", os.path.basename(run_folder), len(local_ids))
+
+    ncbi = load_or_refresh(args.bioproject, args.cache, args.refresh)
+    if ncbi is None:
+        logger.error("Could not load NCBI runinfo for %s", args.bioproject)
+        sys.exit(1)
+
+    published, missing = emit_status_tsv(out, local_ids, ncbi)
+    logger.info("Wrote %s", out)
+    logger.info("Summary: %d published / %d missing / %d total",
+                published, missing, published + missing)
+
+
+if __name__ == "__main__":
+    cli()

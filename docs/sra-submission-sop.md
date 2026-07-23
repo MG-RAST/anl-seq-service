@@ -45,23 +45,55 @@ Sets **`NCBI_CONTACT`**, **`NCBI_CONTACT_FIRST`**, **`NCBI_CONTACT_LAST`**, **`N
 
 Verify:
 ```bash
-echo $NCBI_USER   # should print 'subftp' (or the assigned Center ID user)
+echo $NCBI_USER   # should print 'Illinois_WBE' for the center account
 ```
+
+### 5a. (Optional but recommended for backlog replay) Check which samples are already published
+
+Only relevant when re-processing a run that may have been partially submitted before (e.g., every batch we run for the CDC-era truncation-bug cleanup).
+
+```bash
+check-published-samples -r <run_folder>
+```
+
+This fetches NCBI's current runinfo for PRJNA989260 (24-hour cache under `~/.cache/anl-seq-service/`) and produces `<run_folder>/SRA/published.tsv` with per-sample status. The INFO summary reports `N published / M missing / T total` — review before triggering the upload.
+
+Options:
+- `--refresh` — force fresh eutils fetch even if the cache is <24h old
+- `-b <bioproject>` — target a different BioProject (default PRJNA989260)
+- `-o <out.tsv>` — override the output path
+
+The output TSV columns: `sample_id  status  biosample_accession  run_accession  load_date`. `sra-upload` accepts this file directly via `-s` (see step 6) — no format conversion needed.
 
 ### 6. Run
 
 ```bash
+# Baseline (submit everything in the run):
 /local/incoming/covid/scripts/sra-upload \
     -r /local/incoming/nextseq2k_output/nextseq2k_runs/<DIR> \
     -p 2>&1 | tee run.log
+
+# With explicit skip list from step 5a:
+/local/incoming/covid/scripts/sra-upload \
+    -r /local/incoming/nextseq2k_output/nextseq2k_runs/<DIR> \
+    -p -s <run_folder>/SRA/published.tsv 2>&1 | tee run.log
+
+# One-shot: auto-check + skip published + submit:
+/local/incoming/covid/scripts/sra-upload \
+    -r /local/incoming/nextseq2k_output/nextseq2k_runs/<DIR> \
+    -p -S 2>&1 | tee run.log
 ```
 
 **Flags:**
 - `-r` — batch directory (must exist; the wrapper hints the correct path if wrong)
 - `-p` — push package to NCBI's submission FTP
 - `-T` — (optional) upload everything **except** `submit.ready` so nothing triggers on NCBI's side. Use this for the first real submission after any change (regenerate templates, new center account, etc.). Verify on NCBI, then re-run without `-T`.
+- `-s <file>` — skip sample IDs listed in `<file>` (TSV from `check-published-samples` or plain list). Use when you've explicitly reviewed which samples to exclude.
+- `-S` — auto-run `check-published-samples` before generating TSVs and skip anything currently public under PRJNA989260. Convenience wrapper around `-s`.
 - `-l` — force local Python (skip container). Useful if the container image is stale.
 - `-d` — dry-run: prints the commands that would run without executing.
+
+`-s` and `-S` are mutually exclusive. The end-of-run summary reports `Filtered: N sample(s) skipped via <file>` when either is active.
 
 **Note:** `/local/incoming/covid/scripts/sra-upload` is a symlink to `/nfs/seq-data/anl-seq-service/bin/sra-upload`.
 
