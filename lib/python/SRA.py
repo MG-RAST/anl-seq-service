@@ -308,22 +308,24 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
             ### addition mapping from reporting_jurisdiction to ww_surv_jurisdiction 
             row[map2['ww_surv_jurisdiction']] = mapping['samples'][row[0]]['reporting_jurisdiction']
 
-            type = mapping['samples'][row[0]]['sample_type'] if mapping['samples'][row[0]]['sample_type'] else "not collected"
+            sample_type = mapping['samples'][row[0]]['sample_type'] if mapping['samples'][row[0]]['sample_type'] else "not collected"
 
-            duration = str(type.split("-")[0])
+            duration = str(sample_type.split("-")[0])
 
             # default to "not collected" and duration to zero
             row[map2['ww_sample_type']] = 'not collected'
 
-            if re.search("composite|passive", type) :
+            # Case-insensitive: NWSS CSVs mix "Grab sample" (caps) with
+            # "24hr composite" (lowercase). Normalize before matching.
+            sample_type_lc = sample_type.lower()
+            if "composite" in sample_type_lc or "passive" in sample_type_lc :
                 row[map2['ww_sample_type']] = 'composite'
-            elif re.search("grab", type) :
+            elif "grab" in sample_type_lc :
                 row[map2['ww_sample_type']] = 'grab'
                 duration="0"
             else:
-                # row[map2['ww_sample_type']] = 'missing'
-                # logger.error("Can not identify sample type from: %s" , type)
-                logger.error("Can not identify sample type from: %s. Using default: %s" , type, row[map2['ww_sample_type']])
+                logger.error("Can not identify sample type from: %s. Using default: %s" ,
+                             sample_type, row[map2['ww_sample_type']])
                 duration="not collected"
 
 
@@ -341,25 +343,25 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
             row[map2['collection_time']] = "not collected"
             row[map2['ww_surv_target_1_conc']] = "not collected"
 
-            type = mapping['samples'][row[0]]['sample_type'] if row[0] in mapping['samples'] else "not collected"
+            sample_type = mapping['samples'][row[0]]['sample_type'] if row[0] in mapping['samples'] else "not collected"
 
-            # set default to "not collected" and duration to zero, type e.g. Moore 
+            # set default to "not collected" and duration to zero, type e.g. Moore
             duration = "0"
             row[map2['ww_sample_type']] = "not collected"
-            
-            if not type == "not collected" :
 
-                duration = str(type.split("-")[0]) if not type == "not collected" else 0
-   
+            if sample_type != "not collected" :
 
-                if re.search("composite|passive", type) :
+                duration = str(sample_type.split("-")[0])
+
+                sample_type_lc = sample_type.lower()
+                if "composite" in sample_type_lc or "passive" in sample_type_lc :
                     row[map2['ww_sample_type']] = 'composite'
-                elif re.search("grab", type) :
+                elif "grab" in sample_type_lc :
                     row[map2['ww_sample_type']] = 'grab'
                     duration = "0"
                 else:
-                    # row[map2['ww_sample_type']] = 'missing' 
-                    logger.error("Can not identify sample type from: %s. Using default: %s" , type, row[map2['ww_sample_type']])
+                    logger.error("Can not identify sample type from: %s. Using default: %s" ,
+                                 sample_type, row[map2['ww_sample_type']])
 
 
             row[map2['ww_sample_duration']] = duration
@@ -369,7 +371,7 @@ def make_biosample_file(header=None, data=None, constants=None, mapping=None, sa
             # bad column count, malformed value). Row still has the required-
             # field defaults applied above, so we write it and continue.
             rows_crashed += 1
-            exc_type = type(e).__name__
+            exc_type = e.__class__.__name__
             logger.error("Enrichment failed for sample %s: %s: %s. "
                          "Row written with 'not collected' defaults.",
                          row[0] if row else "?", exc_type, e)

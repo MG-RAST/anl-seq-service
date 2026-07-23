@@ -374,8 +374,13 @@ if [ -n "$SKIP_LIST" ] ; then
     fi
 fi
 
-WARN_COUNT=$(grep -c "^WARNING" "$STEP_LOG" 2>/dev/null || echo 0)
-ERR_COUNT=$(grep -c "^ERROR" "$STEP_LOG" 2>/dev/null || echo 0)
+# grep -c always prints a number even on 0 matches, but exits non-zero.
+# Drop the || echo 0 fallback (which caused "0\n0" multi-line captures on
+# match=0, breaking the -gt integer test below).
+WARN_COUNT=$(grep -c "^WARNING" "$STEP_LOG" 2>/dev/null)
+ERR_COUNT=$(grep -c "^ERROR" "$STEP_LOG" 2>/dev/null)
+WARN_COUNT=${WARN_COUNT:-0}
+ERR_COUNT=${ERR_COUNT:-0}
 if [ "$WARN_COUNT" -gt 0 ] || [ "$ERR_COUNT" -gt 0 ] ; then
     echo
     echo "================================================================"
