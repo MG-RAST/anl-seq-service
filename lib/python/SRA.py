@@ -655,6 +655,13 @@ def command_line_options():
                          'Plain list (one id per line, "#" comments) or TSV with '
                          'sample_id + optional status column (only status==published skipped). '
                          'Compatible with bin/check-published-samples output.')
+    parser.add_argument('--blacklist-out', dest='blacklist_out', default=None,
+                    help='Path to write the blacklist TSV. When set, biosample-template '
+                         'sample IDs that are absent from the NWSS samples mapping are '
+                         'SKIPPED from Biosample.tsv and run.tsv output and written here '
+                         'instead (columns: sample_id, reason). Backward-compatible: '
+                         'when omitted, missing-NWSS rows are still written with '
+                         '"not collected" defaults (legacy behavior).')
     parser.add_argument('--log-level', dest='level',
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO",
                         help='logging level')
@@ -663,13 +670,56 @@ def command_line_options():
     logger.debug(args)
     return args
 
+def _compute_nwss_blacklist(biosample_template, nwss_samples_map):
+    """Return sorted list of template sample IDs absent from NWSS mapping."""
+    ids_in_template = []
+    seen = set()
+    with open(biosample_template) as f:
+        for lineno, line in enumerate(f):
+            if lineno == 0:
+                continue  # header
+            parts = line.rstrip("\r\n").split("\t")
+            if not parts:
+                continue
+            sid = parts[0].strip().lstrip("*")
+            if re.fullmatch(r"\d+", sid) and sid not in seen:
+                seen.add(sid)
+                ids_in_template.append(sid)
+    return sorted((s for s in ids_in_template if s not in nwss_samples_map),
+                  key=int)
+
+
+def _write_blacklist(path, blacklist_ids, reason="no_nwss_row"):
+    """Write a TSV of blacklisted sample IDs with the reason column."""
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w") as f:
+        f.write("sample_id\treason\n")
+        for sid in blacklist_ids:
+            f.write(f"{sid}\t{reason}\n")
+
+
 def main(args) :
     logger.setLevel(args.level)
 
     skip_set = _load_skip_set(getattr(args, "skip_samples", None))
+    metadata = None
 
     if args.samples :
         metadata = read_samples(args.samples)
+
+    # Compute NWSS-gap blacklist when both --blacklist-out and a NWSS mapping
+    # are available. Samples absent from the NWSS mapping are added to the
+    # skip_set so they are excluded from BOTH Biosample.tsv and run.tsv, and
+    # the resulting list is written to the operator-specified path.
+    if getattr(args, "blacklist_out", None) and args.biosample_template and metadata:
+        blacklist = _compute_nwss_blacklist(args.biosample_template,
+                                             metadata.get("samples") or {})
+        _write_blacklist(args.blacklist_out, blacklist)
+        logger.info("Blacklisted %d sample(s) with no NWSS row -> %s",
+                    len(blacklist), args.blacklist_out)
+        skip_set = skip_set | set(blacklist)
 
     if args.run_template :
         fastq = read_sequence_dir(args.dir)

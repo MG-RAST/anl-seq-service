@@ -15,21 +15,21 @@ Pull the IDPH and CDPH NWSS submission sheets for this batch. Place them in the 
 
 Ensure `sample_collect_date` columns use `mm/dd/yyyy` (the pipeline reformats to `yyyy-mm-dd` automatically, but only from `mm/dd/yyyy` — other formats will emit `ERROR Date format not recognized`).
 
-### 3. Move / stage files in the batch's `SRA/` folder
+### 3. Stage batch templates in the batch's `SRA/` folder
 
-The pipeline discovers these by suffix under `<run_folder>/SRA/`:
+Only two hand-curated files are needed per batch:
 
 | File | Purpose |
 |---|---|
-| `*IDPH.csv` | Illinois NWSS samples |
-| `*CDPH.csv` | Chicago NWSS samples |
-| `*SiteID*.tsv` | site→collected_by/ww_population lookup |
-| `*.run.tmpl.tsv` | run template |
-| `*.biosample.tmpl.tsv` (or `.Biosample.tmpl.tsv`) | biosample template |
+| `*.run.tmpl.tsv` | run template — one row per sample you intend to submit |
+| `*.biosample.tmpl.tsv` (or `.Biosample.tmpl.tsv`) | biosample template — same sample list |
 
-`ord.samples.csv` is optional (kept for provenance).
+**NWSS reference files are NOT copied per batch anymore** (as of 2026-07-27). `SiteID.tsv`, `NWSS_IDPH.csv`, and `NWSS_CDPH.csv` are read from the master dir `/incoming/SRA_COVID_Temp/` (override via `NWSS_MASTER_DIR` env var). The wrapper picks the latest-by-mtime `MM_DD_YYYY_NWSS_IDPH.csv` and `_CDPH.csv` automatically. Batch-local copies, if present, are ignored.
 
-**Before running:** confirm `SiteID.tsv` includes every site referenced in the biosample template. Missing sites no longer crash the pipeline (fixed 2026-07-16), but the samples get `collected_by=not collected` / `ww_population=not collected` in NCBI. See the WARNINGS block at the end of the run.
+Rationale: NWSS sheets are cumulative longitudinal records. A sample may be sequenced in one batch and reported to NWSS only later — using the master ensures we always check against the newest data.
+
+**Behavior for template samples that aren't in the master NWSS** (any of them):
+they get written to a **blacklist file** and are **NOT uploaded to NCBI**. This is by design (as of 2026-07-27) — samples without real metadata should not ship with `not collected` defaults. Sarah / the NWSS side can review the blacklist and either update NWSS or drop them from the template. Default blacklist path: `./blacklist.<batch>.tsv` in your CWD (override with `-B <path>`).
 
 ### 4. Rename `.tmpl` → `.tsv`
 
@@ -90,6 +90,7 @@ The output TSV columns: `sample_id  status  biosample_accession  run_accession  
 - `-T` — (optional) upload everything **except** `submit.ready` so nothing triggers on NCBI's side. Use this for the first real submission after any change (regenerate templates, new center account, etc.). Verify on NCBI, then re-run without `-T`.
 - `-s <file>` — skip sample IDs listed in `<file>` (TSV from `check-published-samples` or plain list). Use when you've explicitly reviewed which samples to exclude.
 - `-S` — auto-run `check-published-samples` before generating TSVs and skip anything currently public under PRJNA989260. Convenience wrapper around `-s`.
+- `-B <file>` — override blacklist output path (default `./blacklist.<batch>.tsv`). Blacklist lists template samples that are absent from master NWSS.
 - `-l` — force local Python (skip container). Useful if the container image is stale.
 - `-d` — dry-run: prints the commands that would run without executing.
 
