@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Upload a generated submission package to NCBI's submission FTP.
+"""Upload a generated submission package to NCBI's submission FTP or SFTP.
 
 Reads submission.xml to discover the fastq filenames and BioProject, then
-puts everything in a fresh folder under the account base dir on
-ftp-private.ncbi.nlm.nih.gov, and writes the empty `submit.ready` trigger
-file. Exits after upload (no report.xml polling).
+puts everything in a fresh folder under the account base dir on the chosen
+transport (default SFTP), and writes the empty `submit.ready` trigger file.
+Exits after upload (no report.xml polling).
 """
 
 import argparse
@@ -19,11 +19,119 @@ import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
+try:
+    import paramiko
+except ImportError:  # pragma: no cover — paramiko is optional if only FTP used
+    paramiko = None
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_HOST = "ftp-private.ncbi.nlm.nih.gov"
-DEFAULT_PORT = 21
+DEFAULT_TRANSPORT = "sftp"  # sftp is encrypted; FTP kept for legacy use
+DEFAULT_HOSTS = {
+    "sftp": "sftp-private.ncbi.nlm.nih.gov",
+    "ftp":  "ftp-private.ncbi.nlm.nih.gov",
+}
+DEFAULT_PORTS = {"sftp": 22, "ftp": 21}
 SUBMIT_READY_NAME = "submit.ready"
+
+
+# ---------------------------------------------------------------- transports
+
+class SFTPTransport:
+    """Encrypted SSH/SFTP transport via paramiko."""
+
+    def __init__(self, host, port, user, password):
+        if paramiko is None:
+            raise RuntimeError(
+                "paramiko is not installed; cannot use SFTP. "
+                "Install with 'pip install paramiko' or pass --transport ftp."
+            )
+        self._client = paramiko.SSHClient()
+        # TOFU: accept-on-first-use. TODO: pin host key file in a follow-up.
+        self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self._client.connect(
+            host, port=port, username=user, password=password,
+            timeout=60, allow_agent=False, look_for_keys=False,
+        )
+        self._sftp = self._client.open_sftp()
+        hk = self._client.get_transport().get_remote_server_key()
+        self.host_key_desc = f"{hk.get_name()} sha256={hk.get_fingerprint().hex()}"
+
+    def close(self):
+        try:
+            self._sftp.close()
+        except Exception:
+            pass
+        try:
+            self._client.close()
+        except Exception:
+            pass
+
+    def chdir(self, path):     self._sftp.chdir(path)
+    def getcwd(self):          return self._sftp.getcwd()
+    def listdir(self):         return self._sftp.listdir()
+    def mkdir(self, name):     self._sftp.mkdir(name)
+
+    def put_file(self, local_path, remote_name):
+        self._sftp.put(local_path, remote_name)
+
+    def put_empty(self, remote_name):
+        with self._sftp.file(remote_name, "wb") as f:
+            f.write(b"")
+
+    def size(self, remote_name):
+        return self._sftp.stat(remote_name).st_size
+
+
+class FTPTransport:
+    """Legacy cleartext FTP transport via ftplib (for backward compat)."""
+
+    def __init__(self, host, port, user, password):
+        self._ftp = ftplib.FTP()
+        self._ftp.connect(host, port, timeout=60)
+        self._ftp.login(user, password)
+        self.host_key_desc = "n/a (plaintext FTP)"
+
+    def close(self):
+        try:
+            self._ftp.quit()
+        except Exception:
+            try: self._ftp.close()
+            except Exception: pass
+
+    def chdir(self, path):     self._ftp.cwd(path)
+    def getcwd(self):          return self._ftp.pwd()
+    def listdir(self):
+        try:
+            return self._ftp.nlst()
+        except ftplib.error_perm:
+            return []
+    def mkdir(self, name):
+        try:
+            self._ftp.mkd(name)
+        except ftplib.error_perm as e:
+            raise OSError(str(e))
+
+    def put_file(self, local_path, remote_name):
+        with open(local_path, "rb") as f:
+            self._ftp.storbinary(f"STOR {remote_name}", f)
+
+    def put_empty(self, remote_name):
+        self._ftp.storbinary(f"STOR {remote_name}", io.BytesIO(b""))
+
+    def size(self, remote_name):
+        try:
+            return self._ftp.size(remote_name)
+        except ftplib.error_perm:
+            return None
+
+
+def _open_transport(transport, host, port, user, password):
+    if transport == "sftp":
+        return SFTPTransport(host, port, user, password)
+    if transport == "ftp":
+        return FTPTransport(host, port, user, password)
+    raise ValueError(f"Unknown transport {transport!r}")
 
 
 def parse_submission(xml_path):
@@ -54,65 +162,62 @@ def make_folder_name(bioproject, run_basename):
     return "_".join(parts)
 
 
-def connect(host, port, user, password):
-    logger.info("Connecting to %s:%d as %s", host, port, user)
-    ftp = ftplib.FTP()
-    ftp.connect(host, port, timeout=60)
-    ftp.login(user, password)
-    return ftp
+def connect(transport, host, port, user, password):
+    logger.info("Connecting %s to %s:%d as %s", transport.upper(), host, port, user)
+    conn = _open_transport(transport, host, port, user, password)
+    logger.info("Connected. Host key: %s", conn.host_key_desc)
+    return conn
 
 
-def mkdir_and_cd(ftp, base_dir, folder_name, run_basename):
+def mkdir_and_cd(conn, base_dir, folder_name, run_basename):
     """Create the timestamped upload folder. If prior folders for the same
     run are present under base_dir, warn about them so operators can decide
     whether to leave, delete, or investigate.
     """
-    ftp.cwd(base_dir)
+    conn.chdir(base_dir)
     try:
-        existing = ftp.nlst()
-    except ftplib.error_perm:
+        existing = conn.listdir()
+    except Exception:
         existing = []
     prior = [d for d in existing
              if d != folder_name and run_basename and run_basename in d]
     if prior:
         logger.warning("Prior upload folder(s) exist for %s: %s. "
                        "New folder will still be created (fresh timestamp); "
-                       "clean up the old ones on NCBI's FTP if they are stale.",
+                       "clean up the old ones on NCBI's side if they are stale.",
                        run_basename, prior)
     try:
-        ftp.mkd(folder_name)
-    except ftplib.error_perm as e:
+        conn.mkdir(folder_name)
+    except Exception as e:
         logger.error("Failed to create %s under %s: %s", folder_name, base_dir, e)
         raise
-    ftp.cwd(folder_name)
+    conn.chdir(folder_name)
     logger.info("Created and entered %s/%s", base_dir.rstrip("/"), folder_name)
 
 
-def upload_file(ftp, local_path, remote_name=None, progress=""):
-    """Upload one file. Verifies remote SIZE matches local afterwards.
+def upload_file(conn, local_path, remote_name=None, progress=""):
+    """Upload one file. Verifies remote size matches local afterwards.
 
     Returns (size, duration_seconds, verified: bool).
     """
     remote_name = remote_name or os.path.basename(local_path)
     size = os.path.getsize(local_path)
     t0 = time.monotonic()
-    with open(local_path, "rb") as f:
-        ftp.storbinary(f"STOR {remote_name}", f)
+    conn.put_file(local_path, remote_name)
     dt = time.monotonic() - t0
     mbps = (size * 8 / 1e6) / dt if dt > 0 else 0.0
 
     # Post-upload integrity: server-reported size must equal local size.
-    # If SIZE isn't supported (rare on modern FTP), skip silently.
     verified = True
     try:
-        remote_size = ftp.size(remote_name)
+        remote_size = conn.size(remote_name)
         if remote_size is not None and remote_size != size:
             logger.error("SIZE mismatch on %s: local %d, remote %d — "
                          "upload corrupted, folder should be discarded.",
                          remote_name, size, remote_size)
             verified = False
     except Exception as e:
-        logger.debug("Could not verify SIZE for %s: %s", remote_name, e)
+        logger.debug("Could not verify size for %s: %s", remote_name, e)
 
     verify_tag = "" if verified else " [SIZE MISMATCH!]"
     logger.info("%sUploaded %s (%.1f MB in %.1fs, %.1f Mbit/s)%s",
@@ -120,9 +225,9 @@ def upload_file(ftp, local_path, remote_name=None, progress=""):
     return size, dt, verified
 
 
-def upload_empty(ftp, remote_name):
+def upload_empty(conn, remote_name):
     logger.info("Uploading flag file %s", remote_name)
-    ftp.storbinary(f"STOR {remote_name}", io.BytesIO(b""))
+    conn.put_empty(remote_name)
 
 
 def cli():
@@ -139,11 +244,18 @@ def cli():
     p.add_argument("--password", default=os.environ.get("NCBI_PASSWORD"),
                    help="FTP password (default: $NCBI_PASSWORD)")
     p.add_argument("--base-dir", default=os.environ.get("NCBI_BASE_DIR"),
-                   help="Account folder on the FTP host (default: $NCBI_BASE_DIR)")
-    p.add_argument("--host", default=os.environ.get("NCBI_HOST", DEFAULT_HOST),
-                   help=f"FTP host (default: $NCBI_HOST or {DEFAULT_HOST})")
-    p.add_argument("--port", type=int, default=int(os.environ.get("NCBI_PORT", DEFAULT_PORT)),
-                   help=f"FTP port (default: $NCBI_PORT or {DEFAULT_PORT})")
+                   help="Account folder on the transport host (default: $NCBI_BASE_DIR)")
+    p.add_argument("--transport",
+                   default=os.environ.get("NCBI_TRANSPORT", DEFAULT_TRANSPORT),
+                   choices=["sftp", "ftp"],
+                   help=f"Transport protocol (default: $NCBI_TRANSPORT or {DEFAULT_TRANSPORT}). "
+                        f"sftp = encrypted, ftp = cleartext legacy.")
+    p.add_argument("--host", default=os.environ.get("NCBI_HOST"),
+                   help="Host (default: $NCBI_HOST, or sftp-private.ncbi.nlm.nih.gov / "
+                        "ftp-private.ncbi.nlm.nih.gov depending on --transport)")
+    p.add_argument("--port", type=int,
+                   default=int(os.environ["NCBI_PORT"]) if os.environ.get("NCBI_PORT") else None,
+                   help="Port (default: $NCBI_PORT, or 22 for sftp / 21 for ftp)")
     p.add_argument("--dry-run", action="store_true",
                    help="List what would be uploaded, do not connect")
     p.add_argument("--no-trigger", action="store_true",
@@ -155,6 +267,18 @@ def cli():
 
     logging.basicConfig(format="%(levelname)s %(asctime)s\t%(message)s",
                         level=args.log_level)
+
+    # Fill in transport-specific host/port defaults after arg parsing so the
+    # --transport choice controls the fallback endpoint.
+    if not args.host:
+        args.host = DEFAULT_HOSTS[args.transport]
+    if not args.port:
+        args.port = DEFAULT_PORTS[args.transport]
+
+    if args.transport == "sftp" and paramiko is None:
+        logger.error("--transport sftp requires paramiko. Install it "
+                     "(pip install paramiko) or pass --transport ftp.")
+        sys.exit(2)
 
     for name in ("user", "password", "base_dir"):
         if not getattr(args, name):
@@ -202,12 +326,12 @@ def cli():
     n_total = len(fastqs) + 1  # + submission.xml
     verify_failures = []
 
-    ftp = connect(args.host, args.port, args.user, args.password)
+    conn = connect(args.transport, args.host, args.port, args.user, args.password)
     try:
-        mkdir_and_cd(ftp, args.base_dir, folder_name, run_basename)
+        mkdir_and_cd(conn, args.base_dir, folder_name, run_basename)
         for i, fq in enumerate(fastqs, 1):
             sz, _, ok = upload_file(
-                ftp, os.path.join(args.sequence_dir, fq),
+                conn, os.path.join(args.sequence_dir, fq),
                 remote_name=fq,
                 progress=f"[{i}/{n_total}] ",
             )
@@ -215,7 +339,7 @@ def cli():
             if not ok:
                 verify_failures.append(fq)
         sz, _, ok = upload_file(
-            ftp, args.submission_xml, remote_name="submission.xml",
+            conn, args.submission_xml, remote_name="submission.xml",
             progress=f"[{n_total}/{n_total}] ",
         )
         total_bytes += sz
@@ -232,12 +356,9 @@ def cli():
                            "Upload it manually to start NCBI's pipeline, or delete "
                            "the folder.", SUBMIT_READY_NAME)
         else:
-            upload_empty(ftp, SUBMIT_READY_NAME)
+            upload_empty(conn, SUBMIT_READY_NAME)
     finally:
-        try:
-            ftp.quit()
-        except Exception:
-            ftp.close()
+        conn.close()
 
     wall_dt = time.monotonic() - wall_t0
     avg_mbps = (total_bytes * 8 / 1e6) / wall_dt if wall_dt > 0 else 0.0

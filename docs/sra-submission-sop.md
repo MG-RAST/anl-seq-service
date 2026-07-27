@@ -165,15 +165,18 @@ The wrapper also emits a WARNING at start of upload if it finds a prior folder f
 | `ERROR Date format not recognized: <val>` | Date is neither `yyyy-mm-dd` nor `mm/dd/yyyy` | Fix the NWSS CSV date column and re-run |
 | `WARNING: IDPH (54 cols) and CDPH (53 cols) headers differ` | IDPH-only `days_in_sewer` column | Non-fatal; wrapper uses the wider header + pads |
 
-## Timing baselines (Illinois_WBE center account, verified 2026-07-22)
+## Timing baselines (Illinois_WBE center account, verified 2026-07-22 / 2026-07-27)
 
-Measured end-to-end for the 240612 batch (71 samples, 143 files, 11.56 GB):
+Measured end-to-end for the 240612 batch (71 samples, 131–143 files, ~11 GB):
 
 | Phase | Duration | Notes |
 |---|---|---|
-| Upload (FTP) | 136 s (2m 16s) | 679 Mbit/s average |
+| Upload — plain FTP | 126–136 s | 679 Mbit/s average |
+| Upload — SFTP (default as of 2026-07-27) | ~200 s | 440 Mbit/s average — encryption overhead |
 | NCBI ingest → first `report.xml` | ~3–4 min | Test folder |
 | NCBI processing → accessions (Production) | ~15–30 min | based on typical NCBI SLA; not yet measured |
+
+**Transport:** SFTP is the default. Set `NCBI_TRANSPORT=ftp` (or pass `--transport ftp` to `ncbi_upload.py`) to fall back to plain FTP if paramiko isn't available in the container image. Endpoints: `sftp-private.ncbi.nlm.nih.gov:22` and `ftp-private.ncbi.nlm.nih.gov:21`.
 
 ## Test-folder gotcha
 

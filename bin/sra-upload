@@ -255,7 +255,9 @@ case "$RUNTIME" in
             export SINGULARITYENV_NCBI_USER="$NCBI_USER"
             export SINGULARITYENV_NCBI_PASSWORD="$NCBI_PASSWORD"
             export SINGULARITYENV_NCBI_BASE_DIR="$NCBI_BASE_DIR"
-            [ -n "${NCBI_HOST}" ] && export SINGULARITYENV_NCBI_HOST="$NCBI_HOST"
+            [ -n "${NCBI_HOST}" ]      && export SINGULARITYENV_NCBI_HOST="$NCBI_HOST"
+            [ -n "${NCBI_PORT}" ]      && export SINGULARITYENV_NCBI_PORT="$NCBI_PORT"
+            [ -n "${NCBI_TRANSPORT}" ] && export SINGULARITYENV_NCBI_TRANSPORT="$NCBI_TRANSPORT"
         fi
         # Extra binds so the container can read master NWSS + write the
         # blacklist file (which defaults to CWD).
@@ -274,7 +276,9 @@ case "$RUNTIME" in
         DOCKER_ENV="-e NCBI_CONTACT"
         if [ $UPLOAD -eq 1 ] ; then
             DOCKER_ENV="$DOCKER_ENV -e NCBI_USER -e NCBI_PASSWORD -e NCBI_BASE_DIR"
-            [ -n "${NCBI_HOST}" ] && DOCKER_ENV="$DOCKER_ENV -e NCBI_HOST"
+            [ -n "${NCBI_HOST}" ]      && DOCKER_ENV="$DOCKER_ENV -e NCBI_HOST"
+            [ -n "${NCBI_PORT}" ]      && DOCKER_ENV="$DOCKER_ENV -e NCBI_PORT"
+            [ -n "${NCBI_TRANSPORT}" ] && DOCKER_ENV="$DOCKER_ENV -e NCBI_TRANSPORT"
         fi
         # Extra mounts for master NWSS (ro) + CWD (rw for blacklist output).
         EXTRA_MOUNTS="-v ${NWSS_MASTER_DIR}:${NWSS_MASTER_DIR}:ro"
