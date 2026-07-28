@@ -121,6 +121,26 @@ The wrapper prints three artifacts at the end of a real run:
 
 Any of these three has clear success/failure signals. **Do not close the terminal until you've seen the summary block** — that's the only guaranteed evidence the upload completed.
 
+### 7a. (Optional) Poll for terminal status + capture accessions
+
+After `submit.ready` is written (Production only — Test never reaches
+`processed-ok` because Test env has no BioProject data), run:
+
+```bash
+/nfs/seq-data/anl-seq-service/bin/poll-ncbi-report \
+    --folder $NCBI_BASE_DIR/<remote_folder_from_summary_block> \
+    --save-dir ./poll-<batch>
+```
+
+The tool watches the folder over SFTP, always re-fetches `report.xml` /
+`report.N.xml` on every tick (NCBI overwrites the same filename with
+newer status — an earlier ad-hoc poll cached the initial version and
+silently missed the terminal state; that's fixed here), and on
+`processed-ok` writes `accessions.tsv` with `sample_name → SAMN → SRR`.
+
+Typical timing: BioSamples get `SAMN` accessions in ~5 min. SRA runs
+often take 1–4 hours for `SRR` accessions. `--max-hours 6` by default.
+
 ### 8. If it failed partway through
 
 Do NOT just re-run without checking the NCBI side. Each re-run creates a NEW timestamped folder; orphan partial folders accumulate.
