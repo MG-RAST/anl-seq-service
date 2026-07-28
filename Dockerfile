@@ -38,7 +38,7 @@ ADD share/* /usr/local/share/
 ADD . /anl-seq-service/
 
 # install the service
-RUN pip3 install pysftp
+RUN pip3 install pysftp paramiko
 
 # set the entry point
 ENTRYPOINT ["python3" , "/anl-seq-service/lib/python/SRA.py"]

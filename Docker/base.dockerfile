@@ -43,9 +43,10 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then cd /root ; unzip /root/bcl2fa
 
 # install CWL runner
 RUN pip3 install --upgrade pip && \
-    pip3 install \ 
+    pip3 install \
       cwlref-runner \
-      pysftp
+      pysftp \
+      paramiko
 
 
 COPY . /anl-seq-service
