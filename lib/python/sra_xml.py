@@ -70,16 +70,46 @@ def derive_contact_name():
     return "", ""
 
 
-def build_description(comment, org, email, first, last):
+def build_description(comment, org, contacts):
+    """contacts: list of (email, first, last) tuples — one <Contact> per entry.
+
+    Whether NCBI's XSD accepts >1 <Contact> under <Organization> is being
+    empirically tested. If a report.xml surfaces a schema validation
+    error naming <Contact>, this format is rejected — fall back to a
+    single contact or a distribution-list alias.
+    """
     desc = ET.Element("Description")
     ET.SubElement(desc, "Comment").text = comment
     organization = ET.SubElement(desc, "Organization", role="owner", type="center")
     ET.SubElement(organization, "Name").text = org
-    contact = ET.SubElement(organization, "Contact", email=email)
-    name = ET.SubElement(contact, "Name")
-    ET.SubElement(name, "First").text = first
-    ET.SubElement(name, "Last").text = last
+    for email, first, last in contacts:
+        contact = ET.SubElement(organization, "Contact", email=email)
+        name = ET.SubElement(contact, "Name")
+        ET.SubElement(name, "First").text = first
+        ET.SubElement(name, "Last").text = last
     return desc
+
+
+def _parse_contact_list(emails_arg, firsts_arg, lasts_arg):
+    """Split each arg by comma; zip into list of (email, first, last)."""
+    emails = [e.strip() for e in (emails_arg or "").split(",") if e.strip()]
+    firsts = [f.strip() for f in (firsts_arg or "").split(",") if f.strip()]
+    lasts  = [l.strip() for l in (lasts_arg  or "").split(",") if l.strip()]
+    if not emails:
+        raise ValueError("No contact email(s) supplied")
+    # Broadcast a single first/last to all emails if only one was provided
+    if len(firsts) == 1 and len(emails) > 1:
+        firsts = firsts * len(emails)
+    if len(lasts) == 1 and len(emails) > 1:
+        lasts = lasts * len(emails)
+    if len(firsts) != len(emails) or len(lasts) != len(emails):
+        raise ValueError(
+            f"Contact list length mismatch: {len(emails)} email(s), "
+            f"{len(firsts)} first name(s), {len(lasts)} last name(s). "
+            "Ensure NCBI_CONTACT, NCBI_CONTACT_FIRST, NCBI_CONTACT_LAST are "
+            "comma-separated with the same count."
+        )
+    return list(zip(emails, firsts, lasts))
 
 
 def build_biosample_action(sample, header, package, spuid_ns):
@@ -155,7 +185,7 @@ def build_sra_action(sample, header, spuid_ns, bioproject):
 
 
 def build_submission(biosample_tsv, run_tsv, package, spuid_ns,
-                     org, email, first, last, comment):
+                     org, contacts, comment):
     bs_header, bs_rows = read_tsv(biosample_tsv)
     bs_samples = index_by_sample_name(bs_header, bs_rows)
     run_header, run_rows = read_tsv(run_tsv)
@@ -170,7 +200,7 @@ def build_submission(biosample_tsv, run_tsv, package, spuid_ns,
         logger.warning("No bioproject_accession found in %s", biosample_tsv)
 
     submission = ET.Element("Submission")
-    submission.append(build_description(comment, org, email, first, last))
+    submission.append(build_description(comment, org, contacts))
 
     for name, sample in bs_samples.items():
         submission.append(build_biosample_action(sample, bs_header, package, spuid_ns))
@@ -250,6 +280,16 @@ def cli():
                      "--contact-first/--contact-last, or set `git config user.name`.")
         sys.exit(2)
 
+    # Parse comma-separated contact lists into zipped (email, first, last) tuples.
+    try:
+        contacts = _parse_contact_list(args.contact_email,
+                                       args.contact_first,
+                                       args.contact_last)
+    except ValueError as e:
+        logger.error("%s", e)
+        sys.exit(2)
+    logger.info("Contacts: %s", ", ".join(f"{f} {l} <{e}>" for e, f, l in contacts))
+
     if not args.comment:
         base = os.path.basename(args.run_tsv)
         for suffix in (".run.tsv", ".tsv"):
@@ -260,8 +300,7 @@ def cli():
 
     submission = build_submission(
         args.biosample_tsv, args.run_tsv, args.package, args.spuid_namespace,
-        args.org, args.contact_email, args.contact_first, args.contact_last,
-        args.comment,
+        args.org, contacts, args.comment,
     )
     write_xml(submission, args.output)
     logger.info("Wrote %s", args.output)
