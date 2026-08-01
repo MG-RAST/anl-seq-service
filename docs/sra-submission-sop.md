@@ -24,7 +24,27 @@ Only two hand-curated files are needed per batch:
 | `*.run.tmpl.tsv` | run template — one row per sample you intend to submit |
 | `*.biosample.tmpl.tsv` (or `.Biosample.tmpl.tsv`) | biosample template — same sample list |
 
-**NWSS reference files are NOT copied per batch anymore** (as of 2026-07-27). `SiteID.tsv`, `NWSS_IDPH.csv`, and `NWSS_CDPH.csv` are read from the master dir `/incoming/SRA_COVID_Temp/` (override via `NWSS_MASTER_DIR` env var). The wrapper picks the latest-by-mtime `MM_DD_YYYY_NWSS_IDPH.csv` and `_CDPH.csv` automatically. Batch-local copies, if present, are ignored.
+**NWSS reference files are NOT copied per batch anymore** (as of 2026-07-27). `SiteID.tsv`, `NWSS_IDPH.csv`, and `NWSS_CDPH.csv` are read from the master dir. The wrapper picks the latest-by-mtime `MM_DD_YYYY_NWSS_IDPH.csv` and `_CDPH.csv` automatically. Batch-local copies, if present, are ignored.
+
+The master dir is resolved in this order, first reachable wins (as of 2026-07-31):
+
+| # | Path | Notes |
+|---|---|---|
+| 1 | `$NWSS_MASTER_DIR` | explicit override always wins |
+| 2 | `/nfs/seq-data/SRA_COVID_Temp` | **durable mirror — preferred** |
+| 3 | `/incoming/SRA_COVID_Temp` | landing zone, volatile; emits a WARNING |
+
+**The mirror requires a cron entry on mgrast-01 that does not exist yet.** Until it is added, resolution falls through to the landing zone and warns. Add alongside the two existing rsyncs:
+
+```cron
+2 */3 * * * if [ ! -f /tmp/cron.nwss.running ] ; then touch /tmp/cron.nwss.running ; date ; time rsync -rtlP /incoming/SRA_COVID_Temp /nfs/seq-data/ ; rm /tmp/cron.nwss.running ; else echo Found lockfile for nwss ; fi
+```
+
+Minute `2` rather than `1`, so it does not pile onto the two jobs that already fire simultaneously. `rsync -t` preserves mtimes, so latest-by-mtime selection is unaffected; worst-case staleness is 3 hours against sheets updated far less often.
+
+**Why this matters:** on 2026-07-31 the `/incoming` filer went away and submission was blocked, because the NWSS master lived only there — while the fastqs and templates were safe on `sto-386-01`. The master is ~115 MB against ~14 TB of fastqs already being mirrored.
+
+**Do not substitute the batch-local NWSS copies** under `<batch>/SRA/` when the master is unreachable. They are point-in-time snapshots: the 2026-07-24 analysis found **90 of 92** samples they flag as "missing from NWSS" do have metadata recorded in the cumulative master later on. Using them blacklists samples that are in fact submittable.
 
 Rationale: NWSS sheets are cumulative longitudinal records. A sample may be sequenced in one batch and reported to NWSS only later — using the master ensures we always check against the newest data.
 

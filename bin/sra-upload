@@ -77,7 +77,9 @@ echo "-S : Auto-generate skip list via check-published-samples before generating
 echo "-B <file> : Write blacklist of template samples missing from NWSS (default: ./blacklist.<batch>.tsv)"
 echo ""
 echo "Optional environment:"
-echo "  NWSS_MASTER_DIR   Master NWSS reference dir (default: /incoming/SRA_COVID_Temp)"
+echo "  NWSS_MASTER_DIR   Master NWSS reference dir. Overrides the search order,"
+echo "                    which is: /nfs/seq-data/SRA_COVID_Temp (durable mirror),"
+echo "                    then /incoming/SRA_COVID_Temp (landing zone, volatile)."
 echo ""
 echo "Required environment variables:"
 echo "  NCBI_CONTACT      Submitter contact email"
@@ -156,12 +158,66 @@ BIOSAMPLE=$(find "${RUN_FOLDER}/SRA" -maxdepth 2 -iname "*.biosample.tmpl.tsv" 2
 # NWSS reference files (SiteID, IDPH, CDPH) come from the master dir. Batch-local
 # copies are ignored — they get stale/reverted. Master is a longitudinal
 # cumulative record maintained by the NWSS reporting side.
-NWSS_MASTER_DIR="${NWSS_MASTER_DIR:-/incoming/SRA_COVID_Temp}"
-NWSS_MASTER_DIR="${NWSS_MASTER_DIR%/}"
+#
+# Resolution order, first reachable wins:
+#   1. $NWSS_MASTER_DIR   explicit override always wins
+#   2. /nfs/seq-data/...  durable mirror on the analysis filer
+#   3. /incoming/...      instrument landing zone (volatile)
+#
+# The mirror is preferred because the landing-zone filer is not durable: when it
+# went away on 2026-07-31 the NWSS master went with it and submission was
+# blocked, even though the fastqs and templates were safe on sto-386-01. The
+# master is ~115 MB against ~14 TB of fastqs already mirrored.
+#
+# The landing zone stays as a fallback so this is safe to deploy BEFORE the
+# mirror cron exists. Once /nfs/seq-data/SRA_COVID_Temp is being synced, the
+# fallback should never be reached.
+NWSS_MIRROR_DIR=/nfs/seq-data/SRA_COVID_Temp
+NWSS_LANDING_DIR=/incoming/SRA_COVID_Temp
 
-if [ ! -d "$NWSS_MASTER_DIR" ] ; then
-    echo "ERROR: NWSS master dir not found: $NWSS_MASTER_DIR" >&2
-    echo "  Set NWSS_MASTER_DIR env var to override the default." >&2
+# Best-effort reachability that will not wedge on a dead NFS server.
+#
+# Caveat, stated plainly: against a *hard* mount an unresponsive server puts the
+# process in uninterruptible sleep, where SIGTERM and SIGKILL are both deferred,
+# so `timeout` bounds this only once the client gives up. That is precisely why
+# the mirror is tried FIRST — when it is present the dead path is never touched
+# at all, which is the only reliable protection available here.
+nwss_reachable() {
+    [ -n "$1" ] || return 1
+    timeout 10 ls "$1" >/dev/null 2>&1
+}
+
+if [ -n "${NWSS_MASTER_DIR}" ] ; then
+    NWSS_MASTER_DIR="${NWSS_MASTER_DIR%/}"
+    if ! nwss_reachable "$NWSS_MASTER_DIR" ; then
+        echo "ERROR: NWSS master dir not reachable: $NWSS_MASTER_DIR" >&2
+        echo "  (set explicitly via NWSS_MASTER_DIR)" >&2
+        exit 1
+    fi
+elif nwss_reachable "$NWSS_MIRROR_DIR" ; then
+    NWSS_MASTER_DIR="$NWSS_MIRROR_DIR"
+elif nwss_reachable "$NWSS_LANDING_DIR" ; then
+    NWSS_MASTER_DIR="$NWSS_LANDING_DIR"
+    echo "WARNING: using the landing-zone NWSS master at $NWSS_LANDING_DIR." >&2
+    echo "  That filer is not durable. The mirror at $NWSS_MIRROR_DIR is absent" >&2
+    echo "  or unreachable — check that the mgrast-01 rsync for SRA_COVID_Temp" >&2
+    echo "  is in place and has run." >&2
+else
+    cat <<EOF >&2
+ERROR: no reachable NWSS master directory.
+
+Tried:
+  mirror : $NWSS_MIRROR_DIR
+  landing: $NWSS_LANDING_DIR
+
+Submission needs the CUMULATIVE master sheets. Do not substitute the
+batch-local NWSS copies under <batch>/SRA/ — they are point-in-time snapshots,
+and an analysis on 2026-07-24 found 90 of 92 samples they flag as
+"missing from NWSS" do have metadata recorded in the master later on. Using
+them would blacklist samples that are in fact submittable.
+
+Set NWSS_MASTER_DIR if the master lives somewhere else.
+EOF
     exit 1
 fi
 
