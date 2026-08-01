@@ -202,9 +202,18 @@ instrument landing zone (`10.140.134.34`).
 
 The NWSS master lives **only** on the landing zone. When it went away on
 2026-07-31, submission was blocked even though fastqs and templates were safe.
-PR #18 makes `sra-upload` prefer a durable mirror at
-`/nfs/seq-data/SRA_COVID_Temp`, but **the mirroring cron on mgrast-01 does not
-exist yet** (issue #17) — so today the landing zone is still the only source.
+
+`sra-upload` now resolves the master in this order, first reachable wins:
+`$NWSS_MASTER_DIR` → `/nfs/seq-data/SRA_COVID_Temp` (durable mirror) →
+`/incoming/SRA_COVID_Temp` (landing zone, with a WARNING).
+
+**The mirroring cron on mgrast-01 does not exist yet** (issue #17), so in
+practice the landing zone is still the only source and every run warns. Adding
+that one cron line is what makes submission independent of the volatile filer:
+
+```cron
+2 */3 * * * if [ ! -f /tmp/cron.nwss.running ] ; then touch /tmp/cron.nwss.running ; date ; time rsync -rtlP /incoming/SRA_COVID_Temp /nfs/seq-data/ ; rm /tmp/cron.nwss.running ; else echo Found lockfile for nwss ; fi
+```
 
 When that filer is down:
 
@@ -323,5 +332,5 @@ upload, ~14 min to terminal. Deviations are worth investigating.
 - [`sra-submission-sop.md`](sra-submission-sop.md) — single-submission mechanics
 - `reports/work-260730.seqtrack.md` — findings and defect inventory
 - Issues #16 (stale container), #17 (NWSS mirroring), #11 (mirror-cron
-  observability), #12 (undefined site IDs), PR #18
+  observability), #12 (undefined site IDs), PR #18 (merged)
 
